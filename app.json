@@ -7,14 +7,14 @@
     "icon": "./assets/app_icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.zerocode.myapp",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "5"
+      "buildNumber": "6"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +22,7 @@
         "backgroundColor": "#87CEEB"
       },
       "package": "com.zerocode.myapp",
-      "versionCode": 5
+      "versionCode": 6
     },
     "web": {
       "bundler": "metro",
