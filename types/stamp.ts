@@ -11,7 +11,7 @@ export interface StampCard {
   lastStampedAt: string | null;
 }
 
-export const MAX_STAMPS = 10;
+export const MAX_STAMPS = 12;
 
 export const INITIAL_STAMP_CARD: StampCard = {
   stamps: Array.from({ length: MAX_STAMPS }, () => false),

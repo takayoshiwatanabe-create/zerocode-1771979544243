@@ -2,22 +2,27 @@
   "expo": {
     "name": "スタンプカードアプリ",
     "slug": "myapp",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/app_icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.zerocode.myapp"
+      "bundleIdentifier": "com.zerocode.myapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/app_icon.png",
+        "backgroundColor": "#87CEEB"
       },
-      "package": "com.zerocode.myapp"
+      "package": "com.zerocode.myapp",
+      "versionCode": 2
     },
     "web": {
       "bundler": "metro",
@@ -25,7 +30,17 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router"
-    ]
+      "expo-router",
+      "expo-asset"
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "b676d3f7-3d42-486d-81c4-c9796babec76"
+      }
+    },
+    "owner": "yoshi-san"
   }
 }
