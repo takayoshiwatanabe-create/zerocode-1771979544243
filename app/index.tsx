@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Dimensions,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -9,6 +11,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
+import { Audio } from "expo-av";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -21,16 +24,41 @@ import Animated, {
   runOnJS,
   interpolate,
 } from "react-native-reanimated";
-import { loadStampCard, addStamp, resetStampCard } from "@/utils/storage";
+import {
+  loadStampCard,
+  addStamp,
+  removeStamp,
+  resetStampCard,
+  loadTotalGoal,
+  saveTotalGoal,
+} from "@/utils/storage";
 import { Colors } from "@/constants/colors";
-import { MAX_STAMPS, type StampCard, INITIAL_STAMP_CARD } from "@/types/stamp";
+import { type StampCard, INITIAL_STAMP_CARD } from "@/types/stamp";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CARD_SIZE = SCREEN_WIDTH * 0.85;
-const STAMP_COLS = 4;
-const STAMP_ROWS = 3;
-const STAMP_SIZE = 55;
-const STAMP_GAP = 12;
+const CARD_WIDTH = SCREEN_WIDTH * 0.85;
+
+// ── Grid layout logic ──
+function getGridCols(goal: number): number {
+  switch (goal) {
+    case 3: return 3;
+    case 4: return 2;
+    case 5: return 3;
+    case 6: return 3;
+    case 7: return 4;
+    case 8: return 4;
+    case 9: return 3;
+    case 10: return 5;
+    case 11: return 4;
+    case 12: return 4;
+    default: return 4;
+  }
+}
+
+function getCellSize(cols: number): number {
+  const raw = Math.floor((CARD_WIDTH - 32 - (cols - 1) * 8) / cols);
+  return Math.max(44, Math.min(80, raw));
+}
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -61,62 +89,21 @@ function StarCharacter({
 
   return (
     <Animated.View style={[{ width: size, height: size * 1.2, alignItems: "center" }, style, animStyle]}>
-      {/* Star body */}
-      <View style={{
-        width: size,
-        height: size,
-        alignItems: "center",
-        justifyContent: "center",
-      }}>
+      <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
         <Text style={{ fontSize: size * 0.9, textAlign: "center" }}>⭐</Text>
-        {/* Face overlay */}
-        <View style={{
-          position: "absolute",
-          alignItems: "center",
-          justifyContent: "center",
-          top: size * 0.25,
-        }}>
-          {/* Eyes */}
+        <View style={{ position: "absolute", alignItems: "center", justifyContent: "center", top: size * 0.25 }}>
           <View style={{ flexDirection: "row", gap: size * 0.15 }}>
-            <View style={{
-              width: size * 0.08,
-              height: size * 0.08,
-              borderRadius: size * 0.04,
-              backgroundColor: "#333",
-            }} />
-            <View style={{
-              width: size * 0.08,
-              height: size * 0.08,
-              borderRadius: size * 0.04,
-              backgroundColor: "#333",
-            }} />
+            <View style={{ width: size * 0.08, height: size * 0.08, borderRadius: size * 0.04, backgroundColor: "#333" }} />
+            <View style={{ width: size * 0.08, height: size * 0.08, borderRadius: size * 0.04, backgroundColor: "#333" }} />
           </View>
-          {/* Cheeks */}
           <View style={{ flexDirection: "row", gap: size * 0.25, marginTop: 1 }}>
-            <View style={{
-              width: size * 0.1,
-              height: size * 0.06,
-              borderRadius: size * 0.05,
-              backgroundColor: "#FF999980",
-            }} />
-            <View style={{
-              width: size * 0.1,
-              height: size * 0.06,
-              borderRadius: size * 0.05,
-              backgroundColor: "#FF999980",
-            }} />
+            <View style={{ width: size * 0.1, height: size * 0.06, borderRadius: size * 0.05, backgroundColor: "#FF999980" }} />
+            <View style={{ width: size * 0.1, height: size * 0.06, borderRadius: size * 0.05, backgroundColor: "#FF999980" }} />
           </View>
-          {/* Smile */}
           <View style={{
-            width: size * 0.12,
-            height: size * 0.06,
-            borderBottomLeftRadius: size * 0.06,
-            borderBottomRightRadius: size * 0.06,
-            borderBottomWidth: 2,
-            borderLeftWidth: 1,
-            borderRightWidth: 1,
-            borderColor: "#333",
-            marginTop: 1,
+            width: size * 0.12, height: size * 0.06,
+            borderBottomLeftRadius: size * 0.06, borderBottomRightRadius: size * 0.06,
+            borderBottomWidth: 2, borderLeftWidth: 1, borderRightWidth: 1, borderColor: "#333", marginTop: 1,
           }} />
         </View>
       </View>
@@ -139,20 +126,14 @@ function RainbowArch() {
             key={i}
             style={{
               position: "absolute",
-              width: r * 2,
-              height: r,
-              borderTopLeftRadius: r,
-              borderTopRightRadius: r,
-              borderWidth: thickness,
-              borderBottomWidth: 0,
-              borderColor: color,
-              bottom: 0,
-              left: (baseRadius * 2 - r * 2) / 2,
+              width: r * 2, height: r,
+              borderTopLeftRadius: r, borderTopRightRadius: r,
+              borderWidth: thickness, borderBottomWidth: 0, borderColor: color,
+              bottom: 0, left: (baseRadius * 2 - r * 2) / 2,
             }}
           />
         );
       })}
-      {/* Clouds at ends */}
       <Text style={[styles.rainbowCloud, { left: -5, bottom: -5 }]}>☁️</Text>
       <Text style={[styles.rainbowCloud, { right: -5, bottom: -5 }]}>☁️</Text>
     </View>
@@ -160,15 +141,7 @@ function RainbowArch() {
 }
 
 // ── Stamp particle burst ──
-function StampParticles({
-  visible,
-  x,
-  y,
-}: {
-  visible: boolean;
-  x: number;
-  y: number;
-}) {
+function StampParticles({ visible, x, y }: { visible: boolean; x: number; y: number }) {
   const particles = useRef(
     Array.from({ length: 5 }, (_, i) => ({
       angle: (i / 5) * Math.PI * 2 + Math.random() * 0.5,
@@ -197,16 +170,9 @@ function StampParticles({
 }
 
 function ParticleDot({
-  angle,
-  color,
-  cx,
-  cy,
-  progress,
+  angle, color, cx, cy, progress,
 }: {
-  angle: number;
-  color: string;
-  cx: number;
-  cy: number;
+  angle: number; color: string; cx: number; cy: number;
   progress: Animated.SharedValue<number>;
 }) {
   const animStyle = useAnimatedStyle(() => {
@@ -227,13 +193,8 @@ function ParticleDot({
     <Animated.View
       style={[
         {
-          position: "absolute",
-          left: cx - 4,
-          top: cy - 4,
-          width: 8,
-          height: 8,
-          borderRadius: 4,
-          backgroundColor: color,
+          position: "absolute", left: cx - 4, top: cy - 4,
+          width: 8, height: 8, borderRadius: 4, backgroundColor: color,
         },
         animStyle,
       ]}
@@ -246,10 +207,16 @@ function StampSlotCell({
   filled,
   index,
   justFilled,
+  cellSize,
+  isLastFilled,
+  onLongPress,
 }: {
   filled: boolean;
   index: number;
   justFilled: boolean;
+  cellSize: number;
+  isLastFilled: boolean;
+  onLongPress: () => void;
 }) {
   const scale = useSharedValue(filled && !justFilled ? 1 : 0);
 
@@ -259,6 +226,8 @@ function StampSlotCell({
       scale.value = withSpring(1, { damping: 10, stiffness: 200 });
     } else if (filled) {
       scale.value = 1;
+    } else {
+      scale.value = 0;
     }
   }, [filled, justFilled, scale]);
 
@@ -266,12 +235,130 @@ function StampSlotCell({
     transform: [{ scale: scale.value }],
   }));
 
+  const fontSize = Math.max(18, cellSize * 0.55);
+
   return (
-    <View style={styles.stampSlot}>
+    <Pressable
+      onLongPress={isLastFilled ? onLongPress : undefined}
+      delayLongPress={500}
+      style={[
+        styles.stampSlot,
+        {
+          width: cellSize,
+          height: cellSize,
+          borderRadius: cellSize / 2,
+        },
+      ]}
+    >
       {filled ? (
-        <Animated.Text style={[styles.stampStar, starStyle]}>⭐</Animated.Text>
+        <Animated.Text style={[{ fontSize, textAlign: "center" }, starStyle]}>⭐</Animated.Text>
       ) : null}
-    </View>
+    </Pressable>
+  );
+}
+
+// ── Toast notification ──
+function Toast({ message, visible }: { message: string; visible: boolean }) {
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (visible) {
+      opacity.value = withSequence(
+        withTiming(1, { duration: 200 }),
+        withDelay(1200, withTiming(0, { duration: 300 })),
+      );
+    }
+  }, [visible, opacity]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  if (!visible) return null;
+
+  return (
+    <Animated.View style={[styles.toast, animStyle]} pointerEvents="none">
+      <Text style={styles.toastText}>{message}</Text>
+    </Animated.View>
+  );
+}
+
+// ── Settings Modal ──
+function SettingsModal({
+  visible,
+  currentGoal,
+  onChangeGoal,
+  onUndo,
+  canUndo,
+  onClose,
+}: {
+  visible: boolean;
+  currentGoal: number;
+  onChangeGoal: (goal: number) => void;
+  onUndo: () => void;
+  canUndo: boolean;
+  onClose: () => void;
+}) {
+  const goals = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalTitle}>⚙️ せってい</Text>
+
+          {/* Stamp count selector */}
+          <Text style={styles.modalSectionTitle}>スタンプのかず</Text>
+          <View style={styles.goalGrid}>
+            {goals.map((g) => (
+              <Pressable
+                key={g}
+                onPress={() => onChangeGoal(g)}
+                style={[
+                  styles.goalButton,
+                  g === currentGoal && styles.goalButtonActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.goalButtonText,
+                    g === currentGoal && styles.goalButtonTextActive,
+                  ]}
+                >
+                  {g}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Undo button */}
+          <Pressable
+            onPress={() => {
+              if (!canUndo) return;
+              Alert.alert(
+                "スタンプをもどす",
+                "さいごのスタンプを1こもどしますか？",
+                [
+                  { text: "キャンセル", style: "cancel" },
+                  { text: "もどす", style: "destructive", onPress: onUndo },
+                ],
+              );
+            }}
+            style={[styles.undoButton, !canUndo && styles.undoButtonDisabled]}
+          >
+            <Text style={[styles.undoButtonText, !canUndo && styles.undoButtonTextDisabled]}>
+              ↩️ スタンプを1こもどす
+            </Text>
+          </Pressable>
+
+          {/* Close button */}
+          <Pressable onPress={onClose} style={styles.closeButton}>
+            <Text style={styles.closeButtonText}>とじる</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -279,12 +366,19 @@ function StampSlotCell({
 export default function HomeScreen() {
   const router = useRouter();
   const [card, setCard] = useState<StampCard>(INITIAL_STAMP_CARD);
+  const [totalGoal, setTotalGoal] = useState(12);
   const [lastFilledIndex, setLastFilledIndex] = useState(-1);
   const [particlePos, setParticlePos] = useState<{ visible: boolean; x: number; y: number }>({
-    visible: false,
-    x: 0,
-    y: 0,
+    visible: false, x: 0, y: 0,
   });
+  const [showSettings, setShowSettings] = useState(false);
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
+
+  // Sound refs
+  const stampSound = useRef<Audio.Sound | null>(null);
+  const completeSound = useRef<Audio.Sound | null>(null);
+  const undoSound = useRef<Audio.Sound | null>(null);
 
   // Animations
   const buttonScale = useSharedValue(1);
@@ -292,10 +386,41 @@ export default function HomeScreen() {
   const star2Bounce = useSharedValue(0);
   const flashOpacity = useSharedValue(0);
 
+  // Load sounds
+  useEffect(() => {
+    async function loadSounds() {
+      try {
+        const { sound: s1 } = await Audio.Sound.createAsync(require("@/assets/sounds/stamp.wav"));
+        stampSound.current = s1;
+        const { sound: s2 } = await Audio.Sound.createAsync(require("@/assets/sounds/complete.wav"));
+        completeSound.current = s2;
+        const { sound: s3 } = await Audio.Sound.createAsync(require("@/assets/sounds/undo.wav"));
+        undoSound.current = s3;
+      } catch {}
+    }
+    loadSounds();
+    return () => {
+      stampSound.current?.unloadAsync();
+      completeSound.current?.unloadAsync();
+      undoSound.current?.unloadAsync();
+    };
+  }, []);
+
+  const playSound = async (sound: Audio.Sound | null) => {
+    try {
+      if (!sound) return;
+      await sound.setPositionAsync(0);
+      await sound.playAsync();
+    } catch {}
+  };
+
   useFocusEffect(
     useCallback(() => {
       setLastFilledIndex(-1);
-      loadStampCard().then(setCard);
+      loadTotalGoal().then((goal) => {
+        setTotalGoal(goal);
+        loadStampCard(goal).then(setCard);
+      });
     }, [])
   );
 
@@ -306,8 +431,7 @@ export default function HomeScreen() {
         withTiming(-8, { duration: 750, easing: Easing.inOut(Easing.ease) }),
         withTiming(0, { duration: 750, easing: Easing.inOut(Easing.ease) }),
       ),
-      -1,
-      true,
+      -1, true,
     );
     star2Bounce.value = withDelay(
       400,
@@ -316,15 +440,31 @@ export default function HomeScreen() {
           withTiming(-6, { duration: 800, easing: Easing.inOut(Easing.ease) }),
           withTiming(0, { duration: 800, easing: Easing.inOut(Easing.ease) }),
         ),
-        -1,
-        true,
+        -1, true,
       ),
     );
   }, [starBounce, star2Bounce]);
 
   const currentCount = card.stamps.filter(Boolean).length;
-  const remaining = MAX_STAMPS - currentCount;
-  const allFilled = currentCount >= MAX_STAMPS;
+  const remaining = totalGoal - currentCount;
+  const allFilled = currentCount >= totalGoal;
+  const gridCols = getGridCols(totalGoal);
+  const cellSize = getCellSize(gridCols);
+  const gridGap = Math.max(6, Math.min(12, cellSize * 0.15));
+
+  // Find the last filled stamp index for long-press undo
+  const lastFilledStampIndex = (() => {
+    for (let i = card.stamps.length - 1; i >= 0; i--) {
+      if (card.stamps[i]) return i;
+    }
+    return -1;
+  })();
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setToastVisible(true);
+    setTimeout(() => setToastVisible(false), 1800);
+  };
 
   const navigateToReward = useCallback(() => {
     router.push("/reward");
@@ -333,7 +473,6 @@ export default function HomeScreen() {
   const handleStampPress = async () => {
     if (allFilled) return;
 
-    // Button bounce
     buttonScale.value = withSequence(
       withTiming(0.93, { duration: 100 }),
       withSpring(1, { damping: 10, stiffness: 200 }),
@@ -348,13 +487,13 @@ export default function HomeScreen() {
     setLastFilledIndex(newIndex);
     setCard(updated);
 
-    // Particle burst position (approximate center of the stamp slot)
-    const col = newIndex % STAMP_COLS;
-    const row = Math.floor(newIndex / STAMP_COLS);
-    const gridWidth = STAMP_COLS * (STAMP_SIZE + STAMP_GAP) - STAMP_GAP;
-    const gridStartX = (CARD_SIZE - gridWidth) / 2;
-    const px = gridStartX + col * (STAMP_SIZE + STAMP_GAP) + STAMP_SIZE / 2;
-    const py = 180 + row * (STAMP_SIZE + STAMP_GAP) + STAMP_SIZE / 2;
+    // Particle burst position
+    const col = newIndex % gridCols;
+    const row = Math.floor(newIndex / gridCols);
+    const gridWidth = gridCols * (cellSize + gridGap) - gridGap;
+    const gridStartX = (CARD_WIDTH - gridWidth) / 2;
+    const px = gridStartX + col * (cellSize + gridGap) + cellSize / 2;
+    const py = 180 + row * (cellSize + gridGap) + cellSize / 2;
     setParticlePos({ visible: true, x: px, y: py });
     setTimeout(() => setParticlePos((p) => ({ ...p, visible: false })), 600);
 
@@ -362,8 +501,8 @@ export default function HomeScreen() {
     const isComplete = updated.stamps.every(Boolean);
     if (isComplete) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playSound(completeSound.current);
 
-      // Flash effect
       flashOpacity.value = withSequence(
         withTiming(0.8, { duration: 150 }),
         withTiming(0, { duration: 300 }),
@@ -372,7 +511,41 @@ export default function HomeScreen() {
       setTimeout(() => {
         runOnJS(navigateToReward)();
       }, 1200);
+    } else {
+      playSound(stampSound.current);
     }
+  };
+
+  const handleUndo = async () => {
+    const updated = await removeStamp(card);
+    if (!updated) return;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    playSound(undoSound.current);
+    setLastFilledIndex(-1);
+    setCard(updated);
+    showToast("1こもどしたよ");
+  };
+
+  const handleLongPressUndo = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Alert.alert(
+      "スタンプをもどす",
+      "さいごのスタンプを1こもどしますか？",
+      [
+        { text: "キャンセル", style: "cancel" },
+        { text: "もどす", style: "destructive", onPress: handleUndo },
+      ],
+    );
+  };
+
+  const handleChangeGoal = async (newGoal: number) => {
+    if (newGoal === totalGoal) return;
+    await saveTotalGoal(newGoal);
+    setTotalGoal(newGoal);
+    const updated = await loadStampCard(newGoal);
+    setCard(updated);
+    setLastFilledIndex(-1);
   };
 
   const buttonAnimStyle = useAnimatedStyle(() => ({
@@ -383,11 +556,18 @@ export default function HomeScreen() {
     opacity: flashOpacity.value,
   }));
 
+  // Build stamp grid rows for centering last row
+  const gridRows: number[][] = [];
+  for (let i = 0; i < totalGoal; i += gridCols) {
+    const row: number[] = [];
+    for (let j = i; j < Math.min(i + gridCols, totalGoal); j++) {
+      row.push(j);
+    }
+    gridRows.push(row);
+  }
+
   return (
-    <LinearGradient
-      colors={["#87CEEB", "#C8E6F5"]}
-      style={styles.container}
-    >
+    <LinearGradient colors={["#87CEEB", "#C8E6F5"]} style={styles.container}>
       {/* Clouds */}
       <Cloud style={{ position: "absolute", top: 60, right: -10, opacity: 0.7 }} />
       <Cloud style={{ position: "absolute", bottom: 80, left: -20, opacity: 0.5 }} />
@@ -396,12 +576,12 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Text style={styles.headerIcon}>⭐</Text>
-          <Text style={styles.headerCount}>{card.completedCount * MAX_STAMPS + currentCount}</Text>
+          <Text style={styles.headerCount}>{card.completedCount * totalGoal + currentCount}</Text>
         </View>
-        <View style={styles.headerRight}>
+        <Pressable style={styles.headerRight} onPress={() => setShowSettings(true)}>
           <Text style={styles.headerIcon}>⚙️</Text>
           <Text style={styles.headerSettingsText}>せってい</Text>
-        </View>
+        </Pressable>
       </View>
 
       {/* Main card */}
@@ -413,43 +593,46 @@ export default function HomeScreen() {
 
         {/* Task banner */}
         <View style={styles.taskBanner}>
-          <Text style={styles.taskLabel}>きょうのたっせいだい</Text>
+          <Text style={styles.taskLabel}>すたんぷをあつめよう</Text>
         </View>
         <Text style={styles.taskName}>おてつだいをする</Text>
 
         {/* Stamp grid */}
-        <View style={styles.stampGrid}>
-          {card.stamps.map((filled, i) => (
-            <StampSlotCell
-              key={i}
-              filled={filled}
-              index={i}
-              justFilled={i === lastFilledIndex}
-            />
+        <View style={{ alignItems: "center" }}>
+          {gridRows.map((row, rowIdx) => (
+            <View
+              key={rowIdx}
+              style={{
+                flexDirection: "row",
+                justifyContent: "center",
+                gap: gridGap,
+                marginBottom: rowIdx < gridRows.length - 1 ? gridGap : 0,
+              }}
+            >
+              {row.map((stampIdx) => (
+                <StampSlotCell
+                  key={stampIdx}
+                  filled={card.stamps[stampIdx]}
+                  index={stampIdx}
+                  justFilled={stampIdx === lastFilledIndex}
+                  cellSize={cellSize}
+                  isLastFilled={stampIdx === lastFilledStampIndex}
+                  onLongPress={handleLongPressUndo}
+                />
+              ))}
+            </View>
           ))}
         </View>
 
         {/* Particle effects */}
-        <StampParticles
-          visible={particlePos.visible}
-          x={particlePos.x}
-          y={particlePos.y}
-        />
+        <StampParticles visible={particlePos.visible} x={particlePos.x} y={particlePos.y} />
 
         {/* Star character inside card */}
-        <StarCharacter
-          size={40}
-          bounceAnim={starBounce}
-          style={{ position: "absolute", left: 8, top: 170 }}
-        />
+        <StarCharacter size={40} bounceAnim={starBounce} style={{ position: "absolute", left: 8, top: 170 }} />
       </View>
 
       {/* Stamp button */}
-      <AnimatedPressable
-        onPress={handleStampPress}
-        disabled={allFilled}
-        style={[styles.stampButton, buttonAnimStyle]}
-      >
+      <AnimatedPressable onPress={handleStampPress} disabled={allFilled} style={[styles.stampButton, buttonAnimStyle]}>
         <LinearGradient
           colors={allFilled ? ["#FFD700", "#FFA559"] : ["#5BC8F5", "#4AB8E5"]}
           style={styles.stampButtonGradient}
@@ -471,14 +654,23 @@ export default function HomeScreen() {
       )}
 
       {/* Star character 2 (bottom left) */}
-      <StarCharacter
-        size={35}
-        bounceAnim={star2Bounce}
-        style={{ position: "absolute", bottom: 30, left: 20 }}
-      />
+      <StarCharacter size={35} bounceAnim={star2Bounce} style={{ position: "absolute", bottom: 30, left: 20 }} />
 
       {/* Flash overlay */}
       <Animated.View style={[styles.flashOverlay, flashStyle]} pointerEvents="none" />
+
+      {/* Toast */}
+      <Toast message={toastMsg} visible={toastVisible} />
+
+      {/* Settings Modal */}
+      <SettingsModal
+        visible={showSettings}
+        currentGoal={totalGoal}
+        onChangeGoal={handleChangeGoal}
+        onUndo={handleUndo}
+        canUndo={currentCount > 0}
+        onClose={() => setShowSettings(false)}
+      />
     </LinearGradient>
   );
 }
@@ -547,9 +739,9 @@ const styles = StyleSheet.create({
   },
   // Main card
   mainCard: {
-    width: CARD_SIZE,
+    width: CARD_WIDTH,
     backgroundColor: Colors.surface,
-    borderRadius: CARD_SIZE / 2,
+    borderRadius: CARD_WIDTH / 2,
     paddingTop: 60,
     paddingBottom: 30,
     paddingHorizontal: 20,
@@ -582,27 +774,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: "center",
   },
-  // Stamp grid
-  stampGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: STAMP_GAP,
-    width: STAMP_COLS * (STAMP_SIZE + STAMP_GAP),
-  },
+  // Stamp slot
   stampSlot: {
-    width: STAMP_SIZE,
-    height: STAMP_SIZE,
-    borderRadius: STAMP_SIZE / 2,
     borderWidth: 2,
     borderColor: "#B8E4F9",
     borderStyle: "dashed",
     backgroundColor: "#F0F9FF",
     alignItems: "center",
     justifyContent: "center",
-  },
-  stampStar: {
-    fontSize: 30,
   },
   // Button
   stampButton: {
@@ -658,5 +837,109 @@ const styles = StyleSheet.create({
   flashOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#FFFFFF",
+  },
+  // Toast
+  toast: {
+    position: "absolute",
+    bottom: 100,
+    alignSelf: "center",
+    backgroundColor: "#333333EE",
+    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+  },
+  toastText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "#00000060",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    paddingTop: 12,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: "#CCCCCC",
+    borderRadius: 2,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#333",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  modalSectionTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#555",
+    marginBottom: 12,
+  },
+  goalGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 24,
+  },
+  goalButton: {
+    width: 52,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#F0F0F0",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  goalButtonActive: {
+    backgroundColor: "#FFA559",
+  },
+  goalButtonText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#555",
+  },
+  goalButtonTextActive: {
+    color: "#FFFFFF",
+  },
+  undoButton: {
+    backgroundColor: "#FFF0F0",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  undoButtonDisabled: {
+    opacity: 0.4,
+  },
+  undoButtonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#FF3B30",
+  },
+  undoButtonTextDisabled: {
+    color: "#999",
+  },
+  closeButton: {
+    backgroundColor: "#5BC8F5",
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  closeButtonText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#FFFFFF",
   },
 });

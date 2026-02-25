@@ -11,10 +11,12 @@ export interface StampCard {
   lastStampedAt: string | null;
 }
 
-export const MAX_STAMPS = 12;
+export const DEFAULT_GOAL = 12;
+/** @deprecated Use dynamic goal from storage instead */
+export const MAX_STAMPS = DEFAULT_GOAL;
 
 export const INITIAL_STAMP_CARD: StampCard = {
-  stamps: Array.from({ length: MAX_STAMPS }, () => false),
+  stamps: Array.from({ length: DEFAULT_GOAL }, () => false),
   completedCount: 0,
   lastStampedAt: null,
 };
