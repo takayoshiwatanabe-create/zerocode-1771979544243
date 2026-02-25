@@ -22,6 +22,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { resetStampCard } from "@/utils/storage";
 import { Colors } from "@/constants/colors";
+import { t } from "@/i18n";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -273,7 +274,7 @@ export default function RewardScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.titleGradient}
           >
-            <Text style={styles.titleText}>ごほうび！</Text>
+            <Text style={styles.titleText}>{t("reward.title")}</Text>
           </LinearGradient>
         </Animated.View>
 
@@ -289,7 +290,7 @@ export default function RewardScreen() {
               end={{ x: 1, y: 1 }}
               style={styles.rewardButtonGradient}
             >
-              <Text style={styles.rewardButtonText}>ごほうびゲット！</Text>
+              <Text style={styles.rewardButtonText}>{t("reward.getReward")}</Text>
             </LinearGradient>
           </Pressable>
         </Animated.View>

@@ -12,6 +12,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { loadMilestones } from "@/utils/milestoneStorage";
 import { loadStampCard, loadTotalGoal } from "@/utils/storage";
 import type { Milestone } from "@/types/milestone";
+import { t } from "@/i18n";
 
 export default function RoadmapScreen() {
   const router = useRouter();
@@ -39,10 +40,10 @@ export default function RoadmapScreen() {
       {/* Header */}
       <LinearGradient colors={["#1A1A2E", "#16213E"]} style={styles.header}>
         <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>← もどる</Text>
+          <Text style={styles.backBtnText}>{t("roadmap.back")}</Text>
         </Pressable>
-        <Text style={styles.headerTitle}>🗺️ ごほうびロードマップ</Text>
-        <Text style={styles.headerSub}>現在 {totalStamps}こ達成中！</Text>
+        <Text style={styles.headerTitle}>{t("roadmap.title")}</Text>
+        <Text style={styles.headerSub}>{t("roadmap.currentProgress", { count: totalStamps })}</Text>
       </LinearGradient>
 
       <ScrollView
@@ -55,7 +56,7 @@ export default function RoadmapScreen() {
           <View style={styles.goalCircle}>
             <Text style={styles.goalEmoji}>🏆</Text>
           </View>
-          <Text style={styles.goalText}>ゴール</Text>
+          <Text style={styles.goalText}>{t("roadmap.goal")}</Text>
         </View>
 
         {/* Milestones (reversed: highest first) */}
@@ -116,18 +117,18 @@ export default function RoadmapScreen() {
                   </Text>
                   {achieved && ms.achievedAt && (
                     <Text style={styles.dateText}>
-                      ✨{" "}
-                      {new Date(ms.achievedAt).toLocaleDateString("ja-JP", {
-                        month: "short",
-                        day: "numeric",
-                      })}{" "}
-                      達成！
+                      ✨ {t("roadmap.achieved", {
+                        date: new Date(ms.achievedAt).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                        }),
+                      })}
                     </Text>
                   )}
                   {isNextTarget && (
                     <View style={styles.currentBadge}>
                       <Text style={styles.currentBadgeText}>
-                        あと {ms.count - totalStamps}こ！
+                        {t("roadmap.remaining", { count: ms.count - totalStamps })}
                       </Text>
                     </View>
                   )}
@@ -142,7 +143,7 @@ export default function RoadmapScreen() {
           <View style={[styles.goalCircle, styles.startCircle]}>
             <Text style={styles.goalEmoji}>🚀</Text>
           </View>
-          <Text style={styles.startText}>スタート</Text>
+          <Text style={styles.startText}>{t("roadmap.start")}</Text>
         </View>
 
         <View style={{ height: 40 }} />

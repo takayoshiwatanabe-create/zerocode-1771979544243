@@ -50,6 +50,7 @@ import { EMOJI_OPTIONS } from "@/types/milestone";
 import { usePremium } from "@/hooks/usePremium";
 import { PaywallModal } from "@/components/PaywallModal";
 import { AdBanner } from "@/components/AdBanner";
+import { t, isRTL } from "@/i18n";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH * 0.85;
@@ -317,7 +318,7 @@ function EmojiPickerModal({
     <Modal visible={visible} transparent animationType="fade">
       <Pressable style={styles.emojiPickerOverlay} onPress={onClose}>
         <View style={styles.emojiPickerContent}>
-          <Text style={styles.emojiPickerTitle}>えらんでね</Text>
+          <Text style={styles.emojiPickerTitle}>{t("settings.emojiPickerTitle")}</Text>
           <View style={styles.emojiGrid}>
             {EMOJI_OPTIONS.map((emoji) => (
               <Pressable
@@ -404,10 +405,10 @@ function SettingsModal({
         <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
           <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
             <View style={styles.modalHandle} />
-            <Text style={styles.modalTitle}>⚙️ せってい</Text>
+            <Text style={styles.modalTitle}>{t("settings.title")}</Text>
 
             {/* Theme selector */}
-            <Text style={styles.modalSectionTitle}>テーマ</Text>
+            <Text style={styles.modalSectionTitle}>{t("settings.theme")}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -455,7 +456,7 @@ function SettingsModal({
             </ScrollView>
 
             {/* Stamp count selector */}
-            <Text style={styles.modalSectionTitle}>スタンプのかず</Text>
+            <Text style={styles.modalSectionTitle}>{t("settings.stampCount")}</Text>
             <View style={styles.goalGrid}>
               {goals.map((g) => (
                 <Pressable
@@ -481,13 +482,13 @@ function SettingsModal({
             {/* Milestone settings */}
             <View style={styles.milestoneSection}>
               <View style={styles.milestoneSectionHeader}>
-                <Text style={styles.modalSectionTitle}>ごほうびマイルストーン</Text>
+                <Text style={styles.modalSectionTitle}>{t("settings.milestones")}</Text>
                 {!isPremium && (
                   <Pressable
                     onPress={() => onShowPaywall("milestone")}
                     style={styles.proBadgeLarge}
                   >
-                    <Text style={styles.proBadgeLargeText}>✨ PROで解放</Text>
+                    <Text style={styles.proBadgeLargeText}>{t("paywall.unlockPro")}</Text>
                   </Pressable>
                 )}
               </View>
@@ -508,7 +509,7 @@ function SettingsModal({
                         onChangeText={(text) =>
                           updateMilestone(i, { rewardName: text })
                         }
-                        placeholder="ごほうびを入力..."
+                        placeholder={t("settings.rewardPlaceholder")}
                         style={styles.milestoneInput}
                       />
                       <Pressable onPress={() => removeMilestone(i)}>
@@ -518,10 +519,11 @@ function SettingsModal({
                   ))}
                   <Pressable onPress={addMilestone} style={styles.addMilestoneBtn}>
                     <Text style={styles.addMilestoneBtnText}>
-                      + {milestones.length > 0
-                        ? milestones[milestones.length - 1].count + 10
-                        : 10}
-                      こ目のごほうびを追加
+                      {t("settings.addMilestone", {
+                        count: milestones.length > 0
+                          ? milestones[milestones.length - 1].count + 10
+                          : 10,
+                      })}
                     </Text>
                   </Pressable>
                 </>
@@ -540,7 +542,7 @@ function SettingsModal({
                     style={styles.lockOverlay}
                     onPress={() => onShowPaywall("milestone")}
                   >
-                    <Text style={styles.lockText}>🔒 プレミアムで解放</Text>
+                    <Text style={styles.lockText}>{t("paywall.lockedLabel")}</Text>
                   </Pressable>
                 </View>
               )}
@@ -551,18 +553,18 @@ function SettingsModal({
               onPress={() => {
                 if (!canUndo) return;
                 Alert.alert(
-                  "スタンプをもどす",
-                  "さいごのスタンプを1こもどしますか？",
+                  t("settings.undoConfirmTitle"),
+                  t("settings.undoConfirmMsg"),
                   [
-                    { text: "キャンセル", style: "cancel" },
-                    { text: "もどす", style: "destructive", onPress: onUndo },
+                    { text: t("settings.cancel"), style: "cancel" },
+                    { text: t("settings.undoAction"), style: "destructive", onPress: onUndo },
                   ],
                 );
               }}
               style={[styles.undoButton, !canUndo && styles.undoButtonDisabled]}
             >
               <Text style={[styles.undoButtonText, !canUndo && styles.undoButtonTextDisabled]}>
-                ↩️ スタンプを1こもどす
+                {t("settings.undoStamp")}
               </Text>
             </Pressable>
 
@@ -571,39 +573,39 @@ function SettingsModal({
               <Pressable
                 onPress={() => {
                   Alert.alert(
-                    "スタンプ総合計をリセット",
-                    "これまでのスタンプ総合計（⭐の数）が0になります。\n現在のカードのスタンプは変わりません。\nよろしいですか？",
+                    t("settings.resetTotalConfirmTitle"),
+                    t("settings.resetTotalConfirmMsg"),
                     [
-                      { text: "キャンセル", style: "cancel" },
-                      { text: "リセット", style: "destructive", onPress: onResetTotal },
+                      { text: t("settings.cancel"), style: "cancel" },
+                      { text: t("settings.resetAction"), style: "destructive", onPress: onResetTotal },
                     ],
                   );
                 }}
                 style={styles.resetTotalButton}
               >
-                <Text style={styles.resetTotalButtonText}>⭐ 総合計をリセット</Text>
+                <Text style={styles.resetTotalButtonText}>{t("settings.resetTotal")}</Text>
               </Pressable>
 
               <Pressable
                 onPress={() => {
                   Alert.alert(
-                    "すべてリセット",
-                    "現在のカードのスタンプと総合計を\nすべて0にします。本当によろしいですか？",
+                    t("settings.resetAllConfirmTitle"),
+                    t("settings.resetAllConfirmMsg"),
                     [
-                      { text: "キャンセル", style: "cancel" },
-                      { text: "すべてリセット", style: "destructive", onPress: onResetAll },
+                      { text: t("settings.cancel"), style: "cancel" },
+                      { text: t("settings.resetAllAction"), style: "destructive", onPress: onResetAll },
                     ],
                   );
                 }}
                 style={styles.resetAllButton}
               >
-                <Text style={styles.resetAllButtonText}>🗑️ すべてリセット</Text>
+                <Text style={styles.resetAllButtonText}>{t("settings.resetAll")}</Text>
               </Pressable>
             </View>
 
             {/* Close button */}
             <Pressable onPress={onClose} style={styles.closeButton}>
-              <Text style={styles.closeButtonText}>とじる</Text>
+              <Text style={styles.closeButtonText}>{t("settings.close")}</Text>
             </Pressable>
 
             <View style={{ height: 20 }} />
@@ -769,7 +771,7 @@ export default function HomeScreen() {
     const { milestones: updatedMs, newlyAchieved } = await checkAndUpdateMilestones(newTotal);
     if (newlyAchieved.length > 0) {
       setMilestones(updatedMs);
-      showToast(`🎯 ${newlyAchieved[0].rewardEmoji} ${newlyAchieved[0].rewardName} 達成！`);
+      showToast(t("toast.milestoneAchieved", { emoji: newlyAchieved[0].rewardEmoji, name: newlyAchieved[0].rewardName }));
     }
 
     // Particle burst position
@@ -809,17 +811,17 @@ export default function HomeScreen() {
     playSound(undoSound.current);
     setLastFilledIndex(-1);
     setCard(updated);
-    showToast("1こもどしたよ");
+    showToast(t("toast.undone"));
   };
 
   const handleLongPressUndo = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     Alert.alert(
-      "スタンプをもどす",
-      "さいごのスタンプを1こもどしますか？",
+      t("settings.undoConfirmTitle"),
+      t("settings.undoConfirmMsg"),
       [
-        { text: "キャンセル", style: "cancel" },
-        { text: "もどす", style: "destructive", onPress: handleUndo },
+        { text: t("settings.cancel"), style: "cancel" },
+        { text: t("settings.undoAction"), style: "destructive", onPress: handleUndo },
       ],
     );
   };
@@ -849,14 +851,14 @@ export default function HomeScreen() {
     await saveStampCard(zeroed);
     setCard(zeroed);
     setLastFilledIndex(-1);
-    showToast("総合計をリセットしました");
+    showToast(t("toast.resetTotal"));
   };
 
   const handleResetAll = async () => {
     const fresh = await clearAllData();
     setCard(fresh);
     setLastFilledIndex(-1);
-    showToast("すべてリセットしました");
+    showToast(t("toast.resetAll"));
   };
 
   const buttonAnimStyle = useAnimatedStyle(() => ({
@@ -908,7 +910,7 @@ export default function HomeScreen() {
           </Pressable>
           <Pressable style={styles.headerRight} onPress={() => setShowSettings(true)}>
             <Text style={styles.headerIcon}>⚙️</Text>
-            <Text style={[styles.headerSettingsText, { color: isDark ? "#CCC" : "#555" }]}>せってい</Text>
+            <Text style={[styles.headerSettingsText, { color: isDark ? "#CCC" : "#555" }]}>{t("settings.title").replace("⚙️ ", "")}</Text>
           </Pressable>
         </View>
       </View>
@@ -922,9 +924,9 @@ export default function HomeScreen() {
 
         {/* Task banner */}
         <View style={styles.taskBanner}>
-          <Text style={styles.taskLabel}>すたんぷをあつめよう</Text>
+          <Text style={styles.taskLabel}>{t("home.title")}</Text>
         </View>
-        <Text style={[styles.taskName, { color: isDark ? "#EEE" : "#333" }]}>おてつだいをする</Text>
+        <Text style={[styles.taskName, { color: isDark ? "#EEE" : "#333" }]}>{t("home.task")}</Text>
 
         {/* Stamp grid */}
         <View style={{ alignItems: "center" }}>
@@ -974,7 +976,7 @@ export default function HomeScreen() {
         >
           <View style={styles.buttonGlow} />
           <Text style={styles.stampButtonText}>
-            {allFilled ? "🎉 たっせい！" : "スタンプをゲット！"}
+            {allFilled ? t("home.achieved") : t("home.stampButton")}
           </Text>
         </LinearGradient>
       </AnimatedPressable>
@@ -983,7 +985,7 @@ export default function HomeScreen() {
       {!allFilled && (
         <View style={styles.remainingBanner}>
           <Text style={styles.remainingText}>
-            ごほうびまであと<Text style={styles.remainingNumber}>{remaining}</Text>こ！
+            {t("home.remainingBanner", { count: remaining })}
           </Text>
         </View>
       )}

@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { t } from "@/i18n";
 
 type PaywallReason = "theme" | "milestone" | "roadmap" | "general";
 
@@ -20,38 +21,19 @@ interface Props {
   onClose: () => void;
 }
 
-const REASONS: Record<
-  PaywallReason,
-  { emoji: string; title: string; desc: string }
-> = {
-  theme: {
-    emoji: "🎨",
-    title: "テーマを変えよう",
-    desc: "どうぶつ・のりもの・うちゅう・わがら\n4つのテーマが使えるようになります",
-  },
-  milestone: {
-    emoji: "🎯",
-    title: "ごほうびを設定しよう",
-    desc: "10個ごとにオリジナルのごほうびを\n設定できるようになります",
-  },
-  roadmap: {
-    emoji: "🗺️",
-    title: "ロードマップを開放",
-    desc: "全ごほうびの旅マップで\n次の目標が一目でわかります",
-  },
-  general: {
-    emoji: "✨",
-    title: "プレミアムにアップグレード",
-    desc: "全ての機能が解放されます",
-  },
+const REASON_CONFIG: Record<PaywallReason, { emoji: string; titleKey: string; descKey: string }> = {
+  theme: { emoji: "🎨", titleKey: "paywall.themeTitle", descKey: "paywall.themeDesc" },
+  milestone: { emoji: "🎯", titleKey: "paywall.milestoneTitle", descKey: "paywall.milestoneDesc" },
+  roadmap: { emoji: "🗺️", titleKey: "paywall.roadmapTitle", descKey: "paywall.roadmapDesc" },
+  general: { emoji: "✨", titleKey: "paywall.generalTitle", descKey: "paywall.generalDesc" },
 };
 
-const FEATURES = [
-  "🎨 テーマ4種（どうぶつ・のりもの・うちゅう・わがら）",
-  "🚫 広告非表示",
-  "🎯 ごほうびマイルストーン設定",
-  "🗺️ ごほうびロードマップ",
-  "✏️ カスタムごほうび名",
+const FEATURE_KEYS = [
+  "paywall.feature1",
+  "paywall.feature2",
+  "paywall.feature3",
+  "paywall.feature4",
+  "paywall.feature5",
 ];
 
 export function PaywallModal({
@@ -63,7 +45,7 @@ export function PaywallModal({
   onClose,
 }: Props) {
   const [loading, setLoading] = useState(false);
-  const r = REASONS[reason] ?? REASONS.general;
+  const cfg = REASON_CONFIG[reason] ?? REASON_CONFIG.general;
 
   return (
     <Modal visible={visible} transparent animationType="slide">
@@ -79,15 +61,15 @@ export function PaywallModal({
             contentContainerStyle={styles.scrollContent}
           >
             {/* Header */}
-            <Text style={styles.emoji}>{r.emoji}</Text>
-            <Text style={styles.title}>{r.title}</Text>
-            <Text style={styles.desc}>{r.desc}</Text>
+            <Text style={styles.emoji}>{cfg.emoji}</Text>
+            <Text style={styles.title}>{t(cfg.titleKey)}</Text>
+            <Text style={styles.desc}>{t(cfg.descKey)}</Text>
 
             {/* Feature list */}
             <View style={styles.featureList}>
-              {FEATURES.map((f) => (
-                <View key={f} style={styles.featureRow}>
-                  <Text style={styles.featureText}>{f}</Text>
+              {FEATURE_KEYS.map((key) => (
+                <View key={key} style={styles.featureRow}>
+                  <Text style={styles.featureText}>{t(key)}</Text>
                 </View>
               ))}
             </View>
@@ -107,24 +89,21 @@ export function PaywallModal({
                 style={styles.purchaseBtnGradient}
               >
                 <Text style={styles.purchaseBtnText}>
-                  {loading ? "処理中..." : `${price} で買い切り`}
+                  {loading ? t("paywall.processing") : t("paywall.buyButton", { price })}
                 </Text>
                 <Text style={styles.purchaseBtnSub}>
-                  一度の購入で永久に使えます
+                  {t("paywall.buySubtitle")}
                 </Text>
               </LinearGradient>
             </Pressable>
 
             {/* Restore */}
             <Pressable onPress={onRestore} style={styles.restoreBtn}>
-              <Text style={styles.restoreText}>購入を復元する</Text>
+              <Text style={styles.restoreText}>{t("paywall.restore")}</Text>
             </Pressable>
 
             {/* Legal */}
-            <Text style={styles.legal}>
-              購入はApple IDに請求されます。{"\n"}
-              利用規約・プライバシーポリシーはruok.jp/appsをご覧ください。
-            </Text>
+            <Text style={styles.legal}>{t("paywall.legal")}</Text>
           </ScrollView>
         </View>
       </View>

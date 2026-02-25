@@ -18,7 +18,7 @@ async function loadIAP() {
 export function usePremium() {
   const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [price, setPrice] = useState<string>("¥99");
+  const [price, setPrice] = useState<string>("¥100");
 
   useEffect(() => {
     // Check cached state first for fast startup
@@ -43,7 +43,7 @@ export function usePremium() {
         skus: [PRODUCT_ID],
       });
       if (products.length > 0) {
-        setPrice(products[0].localizedPrice ?? "¥99");
+        setPrice(products[0].localizedPrice ?? "¥100");
       }
 
       // Check if already purchased
