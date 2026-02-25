@@ -5,6 +5,7 @@ import { StampGrid } from "@/components/StampGrid";
 import { ProgressBar } from "@/components/ProgressBar";
 import { ActionButton } from "@/components/ActionButton";
 import { RewardModal } from "@/components/RewardModal";
+import { ResetConfirmDialog } from "@/components/ResetConfirmDialog";
 import { loadStampCard, resetStampCard } from "@/utils/storage";
 import { Colors } from "@/constants/colors";
 import { INITIAL_STAMP_CARD, MAX_STAMPS, type StampCard } from "@/types/stamp";
@@ -13,6 +14,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const [card, setCard] = useState<StampCard>(INITIAL_STAMP_CARD);
   const [showReward, setShowReward] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -35,9 +37,18 @@ export default function HomeScreen() {
     }
   };
 
-  const handleReset = async () => {
+  const handleResetRequest = () => {
+    setShowResetConfirm(true);
+  };
+
+  const handleResetConfirm = async () => {
+    setShowResetConfirm(false);
     const fresh = await resetStampCard();
     setCard(fresh);
+  };
+
+  const handleResetCancel = () => {
+    setShowResetConfirm(false);
   };
 
   const handleRewardClose = async () => {
@@ -66,7 +77,7 @@ export default function HomeScreen() {
         {currentCount > 0 && !allFilled && (
           <ActionButton
             label="リセット"
-            onPress={handleReset}
+            onPress={handleResetRequest}
             color={Colors.surface}
             textColor={Colors.textLight}
             style={styles.resetButton}
@@ -79,6 +90,12 @@ export default function HomeScreen() {
           達成回数: {card.completedCount}回
         </Text>
       )}
+
+      <ResetConfirmDialog
+        visible={showResetConfirm}
+        onConfirm={handleResetConfirm}
+        onCancel={handleResetCancel}
+      />
 
       <RewardModal
         visible={showReward}
