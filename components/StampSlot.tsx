@@ -9,6 +9,19 @@ import Animated, {
 import { useEffect } from "react";
 import { Colors } from "@/constants/colors";
 
+const SLOT_COLORS = [
+  "#FF6B6B",
+  "#4ECDC4",
+  "#FFE66D",
+  "#A29BFE",
+  "#FD79A8",
+  "#00B894",
+  "#FDCB6E",
+  "#6C5CE7",
+  "#FF7675",
+  "#74B9FF",
+] as const;
+
 interface StampSlotProps {
   filled: boolean;
   index: number;
@@ -46,15 +59,25 @@ export function StampSlot({ filled, index, animateOnFill = false }: StampSlotPro
     ],
   }));
 
+  const slotColor = SLOT_COLORS[index % SLOT_COLORS.length];
+
   return (
     <View style={styles.slot}>
-      <View style={styles.emptyCircle} />
-      {filled && (
-        <Animated.Text style={[styles.stampEmoji, animatedStyle]}>
-          ⭐
-        </Animated.Text>
+      {filled ? (
+        <View style={[styles.filledCircle, { backgroundColor: slotColor }]}>
+          <View style={[styles.filledInnerRing, { borderColor: `${slotColor}80` }]} />
+        </View>
+      ) : (
+        <View style={styles.emptyCircle}>
+          <View style={styles.emptyInner} />
+        </View>
       )}
-      <Animated.Text style={styles.indexText}>{index + 1}</Animated.Text>
+      <Animated.Text style={[styles.stampEmoji, animatedStyle]}>
+        {filled ? "⭐" : ""}
+      </Animated.Text>
+      <Animated.Text style={[styles.indexText, filled && styles.indexTextFilled]}>
+        {index + 1}
+      </Animated.Text>
     </View>
   );
 }
@@ -76,6 +99,29 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#D0D0D0",
     borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyInner: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#EBEBEB",
+  },
+  filledCircle: {
+    position: "absolute",
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filledInnerRing: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 3,
+    borderColor: "#FFFFFF80",
   },
   stampEmoji: {
     fontSize: 36,
@@ -87,5 +133,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: Colors.textLight,
     fontWeight: "600",
+  },
+  indexTextFilled: {
+    color: Colors.text,
+    fontWeight: "700",
   },
 });
