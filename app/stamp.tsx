@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { ActionButton } from "@/components/ActionButton";
-import { loadStampCard, saveStampCard } from "@/utils/storage";
+import { addStamp, loadStampCard } from "@/utils/storage";
 import { Colors } from "@/constants/colors";
 import { MAX_STAMPS, type StampCard, INITIAL_STAMP_CARD } from "@/types/stamp";
 
@@ -34,8 +34,8 @@ export default function StampScreen() {
   const handleStamp = async () => {
     if (stamped) return;
 
-    const nextIndex = card.stamps.findIndex((s) => !s);
-    if (nextIndex === -1) return;
+    const updated = await addStamp(card);
+    if (!updated) return;
 
     stampScale.value = withSequence(
       withTiming(0, { duration: 0 }),
@@ -47,18 +47,7 @@ export default function StampScreen() {
       withSpring(720, { damping: 12, stiffness: 80 }),
     );
 
-    const newStamps = [...card.stamps];
-    newStamps[nextIndex] = true;
-
-    const isComplete = newStamps.every(Boolean);
-    const updatedCard: StampCard = {
-      stamps: newStamps,
-      completedCount: isComplete ? card.completedCount + 1 : card.completedCount,
-      lastStampedAt: new Date().toISOString(),
-    };
-
-    await saveStampCard(updatedCard);
-    setCard(updatedCard);
+    setCard(updated);
     setStamped(true);
   };
 
