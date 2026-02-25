@@ -29,6 +29,8 @@ import {
   addStamp,
   removeStamp,
   resetStampCard,
+  clearAllData,
+  saveStampCard,
   loadTotalGoal,
   saveTotalGoal,
 } from "@/utils/storage";
@@ -290,6 +292,8 @@ function SettingsModal({
   onChangeGoal,
   onUndo,
   canUndo,
+  onResetTotal,
+  onResetAll,
   onClose,
 }: {
   visible: boolean;
@@ -297,6 +301,8 @@ function SettingsModal({
   onChangeGoal: (goal: number) => void;
   onUndo: () => void;
   canUndo: boolean;
+  onResetTotal: () => void;
+  onResetAll: () => void;
   onClose: () => void;
 }) {
   const goals = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -351,6 +357,41 @@ function SettingsModal({
               ↩️ スタンプを1こもどす
             </Text>
           </Pressable>
+
+          {/* Danger zone */}
+          <View style={styles.dangerZone}>
+            <Pressable
+              onPress={() => {
+                Alert.alert(
+                  "スタンプ総合計をリセット",
+                  "これまでのスタンプ総合計（⭐の数）が0になります。\n現在のカードのスタンプは変わりません。\nよろしいですか？",
+                  [
+                    { text: "キャンセル", style: "cancel" },
+                    { text: "リセット", style: "destructive", onPress: onResetTotal },
+                  ],
+                );
+              }}
+              style={styles.resetTotalButton}
+            >
+              <Text style={styles.resetTotalButtonText}>⭐ 総合計をリセット</Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                Alert.alert(
+                  "すべてリセット",
+                  "現在のカードのスタンプと総合計を\nすべて0にします。本当によろしいですか？",
+                  [
+                    { text: "キャンセル", style: "cancel" },
+                    { text: "すべてリセット", style: "destructive", onPress: onResetAll },
+                  ],
+                );
+              }}
+              style={styles.resetAllButton}
+            >
+              <Text style={styles.resetAllButtonText}>🗑️ すべてリセット</Text>
+            </Pressable>
+          </View>
 
           {/* Close button */}
           <Pressable onPress={onClose} style={styles.closeButton}>
@@ -548,6 +589,23 @@ export default function HomeScreen() {
     setLastFilledIndex(-1);
   };
 
+  const handleResetTotal = async () => {
+    // resetStampCard keeps completedCount, so we manually set it to 0
+    const fresh = await resetStampCard();
+    const zeroed = { ...fresh, completedCount: 0 };
+    await saveStampCard(zeroed);
+    setCard(zeroed);
+    setLastFilledIndex(-1);
+    showToast("総合計をリセットしました");
+  };
+
+  const handleResetAll = async () => {
+    const fresh = await clearAllData();
+    setCard(fresh);
+    setLastFilledIndex(-1);
+    showToast("すべてリセットしました");
+  };
+
   const buttonAnimStyle = useAnimatedStyle(() => ({
     transform: [{ scale: buttonScale.value }],
   }));
@@ -669,6 +727,8 @@ export default function HomeScreen() {
         onChangeGoal={handleChangeGoal}
         onUndo={handleUndo}
         canUndo={currentCount > 0}
+        onResetTotal={handleResetTotal}
+        onResetAll={handleResetAll}
         onClose={() => setShowSettings(false)}
       />
     </LinearGradient>
@@ -930,6 +990,36 @@ const styles = StyleSheet.create({
   },
   undoButtonTextDisabled: {
     color: "#999",
+  },
+  dangerZone: {
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
+    paddingTop: 16,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  resetTotalButton: {
+    borderWidth: 1,
+    borderColor: "#FFB347",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  resetTotalButtonText: {
+    color: "#F97316",
+    fontSize: 15,
+  },
+  resetAllButton: {
+    borderWidth: 1,
+    borderColor: "#EF4444",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  resetAllButtonText: {
+    color: "#EF4444",
+    fontSize: 15,
   },
   closeButton: {
     backgroundColor: "#5BC8F5",
