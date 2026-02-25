@@ -62,6 +62,10 @@
         "projectId": "b676d3f7-3d42-486d-81c4-c9796babec76"
       }
     },
-    "owner": "yoshi-san"
+    "owner": "yoshi-san",
+    "splash": {
+      "image": "./assets/splash.png",
+      "backgroundColor": "#FFFBEB"
+    }
   }
 }
