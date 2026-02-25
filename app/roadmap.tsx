@@ -27,8 +27,7 @@ export default function RoadmapScreen() {
 
         const goal = await loadTotalGoal();
         const card = await loadStampCard(goal);
-        const currentCount = card.stamps.filter(Boolean).length;
-        setTotalStamps(card.completedCount * goal + currentCount);
+        setTotalStamps(card.totalEarnedStamps);
       })();
     }, [])
   );

@@ -20,10 +20,11 @@ export async function saveTotalGoal(goal: number): Promise<void> {
   await AsyncStorage.setItem(GOAL_KEY, String(goal));
 }
 
-function createFreshCard(goal: number, completedCount = 0): StampCard {
+function createFreshCard(goal: number, completedCount = 0, totalEarnedStamps = 0): StampCard {
   return {
     stamps: Array.from({ length: goal }, () => false),
     completedCount,
+    totalEarnedStamps,
     lastStampedAt: null,
   };
 }
@@ -36,6 +37,7 @@ function isValidStampCard(data: unknown, goal: number): data is StampCard {
     obj.stamps.length === goal &&
     obj.stamps.every((s: unknown) => typeof s === "boolean") &&
     typeof obj.completedCount === "number" &&
+    typeof obj.totalEarnedStamps === "number" &&
     (obj.lastStampedAt === null || typeof obj.lastStampedAt === "string")
   );
 }
@@ -49,13 +51,21 @@ export async function loadStampCard(goal?: number): Promise<StampCard> {
     if (!isValidStampCard(parsed, totalGoal)) {
       // Try to migrate: keep filled stamps up to new goal
       if (typeof parsed === "object" && parsed !== null && Array.isArray((parsed as any).stamps)) {
-        const old = parsed as StampCard;
+        const old = parsed as any;
+        const oldStamps: boolean[] = old.stamps;
         const newStamps = Array.from({ length: totalGoal }, (_, i) =>
-          i < old.stamps.length ? old.stamps[i] : false
+          i < oldStamps.length ? oldStamps[i] : false
         );
+        const completedCount: number = old.completedCount ?? 0;
+        // Migrate totalEarnedStamps: calculate from old data if missing
+        const totalEarnedStamps: number =
+          typeof old.totalEarnedStamps === "number"
+            ? old.totalEarnedStamps
+            : completedCount * oldStamps.length + oldStamps.filter(Boolean).length;
         const migrated: StampCard = {
           stamps: newStamps,
-          completedCount: old.completedCount ?? 0,
+          completedCount,
+          totalEarnedStamps,
           lastStampedAt: old.lastStampedAt ?? null,
         };
         await saveStampCard(migrated);
@@ -84,6 +94,7 @@ export async function addStamp(card: StampCard): Promise<StampCard | null> {
   const updated: StampCard = {
     stamps: newStamps,
     completedCount: isComplete ? card.completedCount + 1 : card.completedCount,
+    totalEarnedStamps: card.totalEarnedStamps + 1,
     lastStampedAt: new Date().toISOString(),
   };
 
@@ -107,6 +118,7 @@ export async function removeStamp(card: StampCard): Promise<StampCard | null> {
   const updated: StampCard = {
     stamps: newStamps,
     completedCount: card.completedCount,
+    totalEarnedStamps: Math.max(0, card.totalEarnedStamps - 1),
     lastStampedAt: card.lastStampedAt,
   };
 
@@ -117,7 +129,7 @@ export async function removeStamp(card: StampCard): Promise<StampCard | null> {
 export async function resetStampCard(): Promise<StampCard> {
   const goal = await loadTotalGoal();
   const current = await loadStampCard(goal);
-  const fresh = createFreshCard(goal, current.completedCount);
+  const fresh = createFreshCard(goal, current.completedCount, current.totalEarnedStamps);
   await saveStampCard(fresh);
   return fresh;
 }

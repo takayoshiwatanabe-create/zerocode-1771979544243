@@ -9,10 +9,11 @@ import {
 } from "@/utils/storage";
 import { MAX_STAMPS, type StampCard } from "@/types/stamp";
 
-function createEmptyCard(completedCount = 0): StampCard {
+function createEmptyCard(completedCount = 0, totalEarnedStamps = 0): StampCard {
   return {
     stamps: Array.from({ length: MAX_STAMPS }, () => false),
     completedCount,
+    totalEarnedStamps,
     lastStampedAt: null,
   };
 }
@@ -21,13 +22,14 @@ function createFullCard(completedCount = 1): StampCard {
   return {
     stamps: Array.from({ length: MAX_STAMPS }, () => true),
     completedCount,
+    totalEarnedStamps: completedCount * MAX_STAMPS,
     lastStampedAt: new Date().toISOString(),
   };
 }
 
-function createPartialCard(filledCount: number): StampCard {
+function createPartialCard(filledCount: number, totalEarnedStamps = 0): StampCard {
   const stamps = Array.from({ length: MAX_STAMPS }, (_, i) => i < filledCount);
-  return { stamps, completedCount: 0, lastStampedAt: null };
+  return { stamps, completedCount: 0, totalEarnedStamps, lastStampedAt: null };
 }
 
 beforeEach(async () => {
@@ -42,8 +44,9 @@ describe("loadStampCard", () => {
 
   it("loads saved card from storage", async () => {
     const saved: StampCard = {
-      stamps: [true, true, false, false, false, false, false, false, false, false],
+      stamps: [true, true, false, false, false, false, false, false, false, false, false, false],
       completedCount: 3,
+      totalEarnedStamps: 38,
       lastStampedAt: "2024-01-01T00:00:00.000Z",
     };
     await AsyncStorage.setItem("stamp_card", JSON.stringify(saved));

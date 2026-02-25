@@ -8,6 +8,7 @@ export interface StampSlot {
 export interface StampCard {
   stamps: boolean[];
   completedCount: number;
+  totalEarnedStamps: number;
   lastStampedAt: string | null;
 }
 
@@ -18,6 +19,7 @@ export const MAX_STAMPS = DEFAULT_GOAL;
 export const INITIAL_STAMP_CARD: StampCard = {
   stamps: Array.from({ length: DEFAULT_GOAL }, () => false),
   completedCount: 0,
+  totalEarnedStamps: 0,
   lastStampedAt: null,
 };
 

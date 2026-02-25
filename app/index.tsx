@@ -730,7 +730,7 @@ export default function HomeScreen() {
   const gridCols = getGridCols(totalGoal);
   const cellSize = getCellSize(gridCols);
   const gridGap = Math.max(6, Math.min(12, cellSize * 0.15));
-  const totalStamps = card.completedCount * totalGoal + currentCount;
+  const totalStamps = card.totalEarnedStamps;
 
   const lastFilledStampIndex = (() => {
     for (let i = card.stamps.length - 1; i >= 0; i--) {
@@ -767,7 +767,7 @@ export default function HomeScreen() {
     setCard(updated);
 
     // Check milestones
-    const newTotal = updated.completedCount * totalGoal + updated.stamps.filter(Boolean).length;
+    const newTotal = updated.totalEarnedStamps;
     const { milestones: updatedMs, newlyAchieved } = await checkAndUpdateMilestones(newTotal);
     if (newlyAchieved.length > 0) {
       setMilestones(updatedMs);
@@ -847,7 +847,7 @@ export default function HomeScreen() {
 
   const handleResetTotal = async () => {
     const fresh = await resetStampCard();
-    const zeroed = { ...fresh, completedCount: 0 };
+    const zeroed = { ...fresh, completedCount: 0, totalEarnedStamps: 0 };
     await saveStampCard(zeroed);
     setCard(zeroed);
     setLastFilledIndex(-1);
