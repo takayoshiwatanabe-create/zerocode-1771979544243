@@ -4,14 +4,17 @@ import {
   Dimensions,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { Audio } from "expo-av";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -34,8 +37,19 @@ import {
   loadTotalGoal,
   saveTotalGoal,
 } from "@/utils/storage";
+import {
+  loadMilestones,
+  saveMilestones,
+  checkAndUpdateMilestones,
+} from "@/utils/milestoneStorage";
 import { Colors } from "@/constants/colors";
+import { THEMES, type ThemeKey, type ThemeConfig } from "@/constants/themes";
 import { type StampCard, INITIAL_STAMP_CARD } from "@/types/stamp";
+import type { Milestone } from "@/types/milestone";
+import { EMOJI_OPTIONS } from "@/types/milestone";
+import { usePremium } from "@/hooks/usePremium";
+import { PaywallModal } from "@/components/PaywallModal";
+import { AdBanner } from "@/components/AdBanner";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH * 0.85;
@@ -80,10 +94,12 @@ function StarCharacter({
   size = 50,
   bounceAnim,
   style,
+  stampIcon = "⭐",
 }: {
   size?: number;
   bounceAnim: Animated.SharedValue<number>;
   style?: object;
+  stampIcon?: string;
 }) {
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: bounceAnim.value }],
@@ -92,7 +108,7 @@ function StarCharacter({
   return (
     <Animated.View style={[{ width: size, height: size * 1.2, alignItems: "center" }, style, animStyle]}>
       <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ fontSize: size * 0.9, textAlign: "center" }}>⭐</Text>
+        <Text style={{ fontSize: size * 0.9, textAlign: "center" }}>{stampIcon}</Text>
         <View style={{ position: "absolute", alignItems: "center", justifyContent: "center", top: size * 0.25 }}>
           <View style={{ flexDirection: "row", gap: size * 0.15 }}>
             <View style={{ width: size * 0.08, height: size * 0.08, borderRadius: size * 0.04, backgroundColor: "#333" }} />
@@ -212,6 +228,7 @@ function StampSlotCell({
   cellSize,
   isLastFilled,
   onLongPress,
+  stampIcon = "⭐",
 }: {
   filled: boolean;
   index: number;
@@ -219,6 +236,7 @@ function StampSlotCell({
   cellSize: number;
   isLastFilled: boolean;
   onLongPress: () => void;
+  stampIcon?: string;
 }) {
   const scale = useSharedValue(filled && !justFilled ? 1 : 0);
 
@@ -253,7 +271,7 @@ function StampSlotCell({
       ]}
     >
       {filled ? (
-        <Animated.Text style={[{ fontSize, textAlign: "center" }, starStyle]}>⭐</Animated.Text>
+        <Animated.Text style={[{ fontSize, textAlign: "center" }, starStyle]}>{stampIcon}</Animated.Text>
       ) : null}
     </Pressable>
   );
@@ -285,6 +303,41 @@ function Toast({ message, visible }: { message: string; visible: boolean }) {
   );
 }
 
+// ── Emoji Picker Modal ──
+function EmojiPickerModal({
+  visible,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  onSelect: (emoji: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <Pressable style={styles.emojiPickerOverlay} onPress={onClose}>
+        <View style={styles.emojiPickerContent}>
+          <Text style={styles.emojiPickerTitle}>えらんでね</Text>
+          <View style={styles.emojiGrid}>
+            {EMOJI_OPTIONS.map((emoji) => (
+              <Pressable
+                key={emoji}
+                onPress={() => {
+                  onSelect(emoji);
+                  onClose();
+                }}
+                style={styles.emojiOption}
+              >
+                <Text style={{ fontSize: 28 }}>{emoji}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
 // ── Settings Modal ──
 function SettingsModal({
   visible,
@@ -295,6 +348,12 @@ function SettingsModal({
   onResetTotal,
   onResetAll,
   onClose,
+  isPremium,
+  currentTheme,
+  onChangeTheme,
+  milestones,
+  onUpdateMilestones,
+  onShowPaywall,
 }: {
   visible: boolean;
   currentGoal: number;
@@ -304,99 +363,262 @@ function SettingsModal({
   onResetTotal: () => void;
   onResetAll: () => void;
   onClose: () => void;
+  isPremium: boolean;
+  currentTheme: ThemeKey;
+  onChangeTheme: (key: ThemeKey) => void;
+  milestones: Milestone[];
+  onUpdateMilestones: (milestones: Milestone[]) => void;
+  onShowPaywall: (reason: "theme" | "milestone" | "roadmap" | "general") => void;
 }) {
   const goals = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+  const [editingEmojiIdx, setEditingEmojiIdx] = useState<number | null>(null);
+
+  const addMilestone = () => {
+    const nextCount = milestones.length > 0
+      ? milestones[milestones.length - 1].count + 10
+      : 10;
+    const newMs: Milestone = {
+      id: `ms-${Date.now()}`,
+      count: nextCount,
+      rewardName: "",
+      rewardEmoji: "🎁",
+      achieved: false,
+    };
+    onUpdateMilestones([...milestones, newMs]);
+  };
+
+  const removeMilestone = (idx: number) => {
+    onUpdateMilestones(milestones.filter((_, i) => i !== idx));
+  };
+
+  const updateMilestone = (idx: number, updates: Partial<Milestone>) => {
+    const updated = milestones.map((ms, i) =>
+      i === idx ? { ...ms, ...updates } : ms
+    );
+    onUpdateMilestones(updated);
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide">
       <Pressable style={styles.modalOverlay} onPress={onClose}>
         <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.modalHandle} />
-          <Text style={styles.modalTitle}>⚙️ せってい</Text>
+          <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>⚙️ せってい</Text>
 
-          {/* Stamp count selector */}
-          <Text style={styles.modalSectionTitle}>スタンプのかず</Text>
-          <View style={styles.goalGrid}>
-            {goals.map((g) => (
-              <Pressable
-                key={g}
-                onPress={() => onChangeGoal(g)}
-                style={[
-                  styles.goalButton,
-                  g === currentGoal && styles.goalButtonActive,
-                ]}
-              >
-                <Text
+            {/* Theme selector */}
+            <Text style={styles.modalSectionTitle}>テーマ</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.themeScroll}
+            >
+              {(Object.entries(THEMES) as [ThemeKey, ThemeConfig][]).map(
+                ([key, theme]) => {
+                  const locked = !theme.free && !isPremium;
+                  const selected = currentTheme === key;
+                  return (
+                    <Pressable
+                      key={key}
+                      onPress={() => {
+                        if (locked) {
+                          onShowPaywall("theme");
+                          return;
+                        }
+                        onChangeTheme(key);
+                      }}
+                      style={[
+                        styles.themeCard,
+                        selected && styles.themeCardSelected,
+                        locked && styles.themeCardLocked,
+                      ]}
+                    >
+                      <LinearGradient
+                        colors={theme.bgColors}
+                        style={styles.themePreview}
+                      >
+                        <Text style={{ fontSize: 24 }}>{theme.emoji}</Text>
+                        {locked && (
+                          <View style={styles.lockBadge}>
+                            <Text style={{ fontSize: 12 }}>🔒</Text>
+                          </View>
+                        )}
+                      </LinearGradient>
+                      <Text style={styles.themeName}>{theme.name}</Text>
+                      {!theme.free && !isPremium && (
+                        <Text style={styles.premiumBadge}>PRO</Text>
+                      )}
+                    </Pressable>
+                  );
+                }
+              )}
+            </ScrollView>
+
+            {/* Stamp count selector */}
+            <Text style={styles.modalSectionTitle}>スタンプのかず</Text>
+            <View style={styles.goalGrid}>
+              {goals.map((g) => (
+                <Pressable
+                  key={g}
+                  onPress={() => onChangeGoal(g)}
                   style={[
-                    styles.goalButtonText,
-                    g === currentGoal && styles.goalButtonTextActive,
+                    styles.goalButton,
+                    g === currentGoal && styles.goalButtonActive,
                   ]}
                 >
-                  {g}
-                </Text>
+                  <Text
+                    style={[
+                      styles.goalButtonText,
+                      g === currentGoal && styles.goalButtonTextActive,
+                    ]}
+                  >
+                    {g}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Milestone settings */}
+            <View style={styles.milestoneSection}>
+              <View style={styles.milestoneSectionHeader}>
+                <Text style={styles.modalSectionTitle}>ごほうびマイルストーン</Text>
+                {!isPremium && (
+                  <Pressable
+                    onPress={() => onShowPaywall("milestone")}
+                    style={styles.proBadgeLarge}
+                  >
+                    <Text style={styles.proBadgeLargeText}>✨ PROで解放</Text>
+                  </Pressable>
+                )}
+              </View>
+
+              {isPremium ? (
+                <>
+                  {milestones.map((ms, i) => (
+                    <View key={ms.id} style={styles.milestoneRow}>
+                      <Text style={styles.milestoneCount}>🎯 {ms.count}こ</Text>
+                      <Pressable
+                        onPress={() => setEditingEmojiIdx(i)}
+                        style={styles.emojiBtn}
+                      >
+                        <Text style={{ fontSize: 24 }}>{ms.rewardEmoji}</Text>
+                      </Pressable>
+                      <TextInput
+                        value={ms.rewardName}
+                        onChangeText={(text) =>
+                          updateMilestone(i, { rewardName: text })
+                        }
+                        placeholder="ごほうびを入力..."
+                        style={styles.milestoneInput}
+                      />
+                      <Pressable onPress={() => removeMilestone(i)}>
+                        <Text style={{ color: "#EF4444", fontSize: 16 }}>✕</Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                  <Pressable onPress={addMilestone} style={styles.addMilestoneBtn}>
+                    <Text style={styles.addMilestoneBtnText}>
+                      + {milestones.length > 0
+                        ? milestones[milestones.length - 1].count + 10
+                        : 10}
+                      こ目のごほうびを追加
+                    </Text>
+                  </Pressable>
+                </>
+              ) : (
+                <View style={styles.lockedPreview}>
+                  {[10, 20, 30].map((n) => (
+                    <View key={n} style={[styles.milestoneRow, { opacity: 0.4 }]}>
+                      <Text style={styles.milestoneCount}>🎯 {n}こ</Text>
+                      <Text style={{ fontSize: 24 }}>🍦</Text>
+                      <Text style={[styles.milestoneInput, { color: "#999" }]}>
+                        アイスを買ってもらう
+                      </Text>
+                    </View>
+                  ))}
+                  <Pressable
+                    style={styles.lockOverlay}
+                    onPress={() => onShowPaywall("milestone")}
+                  >
+                    <Text style={styles.lockText}>🔒 プレミアムで解放</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+
+            {/* Undo button */}
+            <Pressable
+              onPress={() => {
+                if (!canUndo) return;
+                Alert.alert(
+                  "スタンプをもどす",
+                  "さいごのスタンプを1こもどしますか？",
+                  [
+                    { text: "キャンセル", style: "cancel" },
+                    { text: "もどす", style: "destructive", onPress: onUndo },
+                  ],
+                );
+              }}
+              style={[styles.undoButton, !canUndo && styles.undoButtonDisabled]}
+            >
+              <Text style={[styles.undoButtonText, !canUndo && styles.undoButtonTextDisabled]}>
+                ↩️ スタンプを1こもどす
+              </Text>
+            </Pressable>
+
+            {/* Danger zone */}
+            <View style={styles.dangerZone}>
+              <Pressable
+                onPress={() => {
+                  Alert.alert(
+                    "スタンプ総合計をリセット",
+                    "これまでのスタンプ総合計（⭐の数）が0になります。\n現在のカードのスタンプは変わりません。\nよろしいですか？",
+                    [
+                      { text: "キャンセル", style: "cancel" },
+                      { text: "リセット", style: "destructive", onPress: onResetTotal },
+                    ],
+                  );
+                }}
+                style={styles.resetTotalButton}
+              >
+                <Text style={styles.resetTotalButtonText}>⭐ 総合計をリセット</Text>
               </Pressable>
-            ))}
-          </View>
 
-          {/* Undo button */}
-          <Pressable
-            onPress={() => {
-              if (!canUndo) return;
-              Alert.alert(
-                "スタンプをもどす",
-                "さいごのスタンプを1こもどしますか？",
-                [
-                  { text: "キャンセル", style: "cancel" },
-                  { text: "もどす", style: "destructive", onPress: onUndo },
-                ],
-              );
+              <Pressable
+                onPress={() => {
+                  Alert.alert(
+                    "すべてリセット",
+                    "現在のカードのスタンプと総合計を\nすべて0にします。本当によろしいですか？",
+                    [
+                      { text: "キャンセル", style: "cancel" },
+                      { text: "すべてリセット", style: "destructive", onPress: onResetAll },
+                    ],
+                  );
+                }}
+                style={styles.resetAllButton}
+              >
+                <Text style={styles.resetAllButtonText}>🗑️ すべてリセット</Text>
+              </Pressable>
+            </View>
+
+            {/* Close button */}
+            <Pressable onPress={onClose} style={styles.closeButton}>
+              <Text style={styles.closeButtonText}>とじる</Text>
+            </Pressable>
+
+            <View style={{ height: 20 }} />
+          </ScrollView>
+
+          {/* Emoji picker */}
+          <EmojiPickerModal
+            visible={editingEmojiIdx !== null}
+            onSelect={(emoji) => {
+              if (editingEmojiIdx !== null) {
+                updateMilestone(editingEmojiIdx, { rewardEmoji: emoji });
+              }
             }}
-            style={[styles.undoButton, !canUndo && styles.undoButtonDisabled]}
-          >
-            <Text style={[styles.undoButtonText, !canUndo && styles.undoButtonTextDisabled]}>
-              ↩️ スタンプを1こもどす
-            </Text>
-          </Pressable>
-
-          {/* Danger zone */}
-          <View style={styles.dangerZone}>
-            <Pressable
-              onPress={() => {
-                Alert.alert(
-                  "スタンプ総合計をリセット",
-                  "これまでのスタンプ総合計（⭐の数）が0になります。\n現在のカードのスタンプは変わりません。\nよろしいですか？",
-                  [
-                    { text: "キャンセル", style: "cancel" },
-                    { text: "リセット", style: "destructive", onPress: onResetTotal },
-                  ],
-                );
-              }}
-              style={styles.resetTotalButton}
-            >
-              <Text style={styles.resetTotalButtonText}>⭐ 総合計をリセット</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                Alert.alert(
-                  "すべてリセット",
-                  "現在のカードのスタンプと総合計を\nすべて0にします。本当によろしいですか？",
-                  [
-                    { text: "キャンセル", style: "cancel" },
-                    { text: "すべてリセット", style: "destructive", onPress: onResetAll },
-                  ],
-                );
-              }}
-              style={styles.resetAllButton}
-            >
-              <Text style={styles.resetAllButtonText}>🗑️ すべてリセット</Text>
-            </Pressable>
-          </View>
-
-          {/* Close button */}
-          <Pressable onPress={onClose} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>とじる</Text>
-          </Pressable>
+            onClose={() => setEditingEmojiIdx(null)}
+          />
         </Pressable>
       </Pressable>
     </Modal>
@@ -406,6 +628,8 @@ function SettingsModal({
 // ── Main screen ──
 export default function HomeScreen() {
   const router = useRouter();
+  const { isPremium, price, purchasePremium, restorePurchases } = usePremium();
+
   const [card, setCard] = useState<StampCard>(INITIAL_STAMP_CARD);
   const [totalGoal, setTotalGoal] = useState(12);
   const [lastFilledIndex, setLastFilledIndex] = useState(-1);
@@ -415,6 +639,11 @@ export default function HomeScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<ThemeKey>("default");
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
+  const [paywallReason, setPaywallReason] = useState<"theme" | "milestone" | "roadmap" | "general" | null>(null);
+
+  const theme = THEMES[currentTheme];
 
   // Sound refs
   const stampSound = useRef<Audio.Sound | null>(null);
@@ -458,6 +687,13 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       setLastFilledIndex(-1);
+      // Load theme
+      AsyncStorage.getItem("theme").then((v) => {
+        if (v && v in THEMES) setCurrentTheme(v as ThemeKey);
+      });
+      // Load milestones
+      loadMilestones().then(setMilestones);
+      // Load card
       loadTotalGoal().then((goal) => {
         setTotalGoal(goal);
         loadStampCard(goal).then(setCard);
@@ -492,8 +728,8 @@ export default function HomeScreen() {
   const gridCols = getGridCols(totalGoal);
   const cellSize = getCellSize(gridCols);
   const gridGap = Math.max(6, Math.min(12, cellSize * 0.15));
+  const totalStamps = card.completedCount * totalGoal + currentCount;
 
-  // Find the last filled stamp index for long-press undo
   const lastFilledStampIndex = (() => {
     for (let i = card.stamps.length - 1; i >= 0; i--) {
       if (card.stamps[i]) return i;
@@ -527,6 +763,14 @@ export default function HomeScreen() {
     const newIndex = updated.stamps.findIndex((s, i) => s && !card.stamps[i]);
     setLastFilledIndex(newIndex);
     setCard(updated);
+
+    // Check milestones
+    const newTotal = updated.completedCount * totalGoal + updated.stamps.filter(Boolean).length;
+    const { milestones: updatedMs, newlyAchieved } = await checkAndUpdateMilestones(newTotal);
+    if (newlyAchieved.length > 0) {
+      setMilestones(updatedMs);
+      showToast(`🎯 ${newlyAchieved[0].rewardEmoji} ${newlyAchieved[0].rewardName} 達成！`);
+    }
 
     // Particle burst position
     const col = newIndex % gridCols;
@@ -589,8 +833,17 @@ export default function HomeScreen() {
     setLastFilledIndex(-1);
   };
 
+  const handleChangeTheme = async (key: ThemeKey) => {
+    setCurrentTheme(key);
+    await AsyncStorage.setItem("theme", key);
+  };
+
+  const handleUpdateMilestones = async (updated: Milestone[]) => {
+    setMilestones(updated);
+    await saveMilestones(updated);
+  };
+
   const handleResetTotal = async () => {
-    // resetStampCard keeps completedCount, so we manually set it to 0
     const fresh = await resetStampCard();
     const zeroed = { ...fresh, completedCount: 0 };
     await saveStampCard(zeroed);
@@ -624,8 +877,11 @@ export default function HomeScreen() {
     gridRows.push(row);
   }
 
+  const isDark = theme.darkMode;
+  const textColor = isDark ? "#FFFFFF" : "#333";
+
   return (
-    <LinearGradient colors={["#87CEEB", "#C8E6F5"]} style={styles.container}>
+    <LinearGradient colors={theme.bgColors} style={styles.container}>
       {/* Clouds */}
       <Cloud style={{ position: "absolute", top: 60, right: -10, opacity: 0.7 }} />
       <Cloud style={{ position: "absolute", bottom: 80, left: -20, opacity: 0.5 }} />
@@ -633,17 +889,32 @@ export default function HomeScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.headerIcon}>⭐</Text>
-          <Text style={styles.headerCount}>{card.completedCount * totalGoal + currentCount}</Text>
+          <Text style={styles.headerIcon}>{theme.stampIcon}</Text>
+          <Text style={[styles.headerCount, { color: textColor }]}>{totalStamps}</Text>
         </View>
-        <Pressable style={styles.headerRight} onPress={() => setShowSettings(true)}>
-          <Text style={styles.headerIcon}>⚙️</Text>
-          <Text style={styles.headerSettingsText}>せってい</Text>
-        </Pressable>
+        <View style={styles.headerRightGroup}>
+          {/* Roadmap button */}
+          <Pressable
+            style={styles.roadmapBtn}
+            onPress={() => {
+              if (!isPremium) {
+                setPaywallReason("roadmap");
+                return;
+              }
+              router.push("/roadmap");
+            }}
+          >
+            <Text style={{ fontSize: 18 }}>🗺️</Text>
+          </Pressable>
+          <Pressable style={styles.headerRight} onPress={() => setShowSettings(true)}>
+            <Text style={styles.headerIcon}>⚙️</Text>
+            <Text style={[styles.headerSettingsText, { color: isDark ? "#CCC" : "#555" }]}>せってい</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Main card */}
-      <View style={styles.mainCard}>
+      <View style={[styles.mainCard, { backgroundColor: theme.cardBg }]}>
         {/* Rainbow arch on top */}
         <View style={styles.rainbowWrapper}>
           <RainbowArch />
@@ -653,7 +924,7 @@ export default function HomeScreen() {
         <View style={styles.taskBanner}>
           <Text style={styles.taskLabel}>すたんぷをあつめよう</Text>
         </View>
-        <Text style={styles.taskName}>おてつだいをする</Text>
+        <Text style={[styles.taskName, { color: isDark ? "#EEE" : "#333" }]}>おてつだいをする</Text>
 
         {/* Stamp grid */}
         <View style={{ alignItems: "center" }}>
@@ -676,6 +947,7 @@ export default function HomeScreen() {
                   cellSize={cellSize}
                   isLastFilled={stampIdx === lastFilledStampIndex}
                   onLongPress={handleLongPressUndo}
+                  stampIcon={theme.stampIcon}
                 />
               ))}
             </View>
@@ -686,13 +958,18 @@ export default function HomeScreen() {
         <StampParticles visible={particlePos.visible} x={particlePos.x} y={particlePos.y} />
 
         {/* Star character inside card */}
-        <StarCharacter size={40} bounceAnim={starBounce} style={{ position: "absolute", left: 8, top: 170 }} />
+        <StarCharacter
+          size={40}
+          bounceAnim={starBounce}
+          style={{ position: "absolute", left: 8, top: 170 }}
+          stampIcon={theme.stampIcon}
+        />
       </View>
 
       {/* Stamp button */}
       <AnimatedPressable onPress={handleStampPress} disabled={allFilled} style={[styles.stampButton, buttonAnimStyle]}>
         <LinearGradient
-          colors={allFilled ? ["#FFD700", "#FFA559"] : ["#5BC8F5", "#4AB8E5"]}
+          colors={allFilled ? ["#FFD700", "#FFA559"] : [theme.primaryColor || "#5BC8F5", "#4AB8E5"]}
           style={styles.stampButtonGradient}
         >
           <View style={styles.buttonGlow} />
@@ -712,7 +989,17 @@ export default function HomeScreen() {
       )}
 
       {/* Star character 2 (bottom left) */}
-      <StarCharacter size={35} bounceAnim={star2Bounce} style={{ position: "absolute", bottom: 30, left: 20 }} />
+      <StarCharacter
+        size={35}
+        bounceAnim={star2Bounce}
+        style={{ position: "absolute", bottom: 80, left: 20 }}
+        stampIcon={theme.stampIcon}
+      />
+
+      {/* Ad Banner (free users only) */}
+      <View style={styles.adContainer}>
+        <AdBanner isPremium={isPremium} />
+      </View>
 
       {/* Flash overlay */}
       <Animated.View style={[styles.flashOverlay, flashStyle]} pointerEvents="none" />
@@ -730,6 +1017,25 @@ export default function HomeScreen() {
         onResetTotal={handleResetTotal}
         onResetAll={handleResetAll}
         onClose={() => setShowSettings(false)}
+        isPremium={isPremium}
+        currentTheme={currentTheme}
+        onChangeTheme={handleChangeTheme}
+        milestones={milestones}
+        onUpdateMilestones={handleUpdateMilestones}
+        onShowPaywall={(reason) => {
+          setShowSettings(false);
+          setTimeout(() => setPaywallReason(reason), 300);
+        }}
+      />
+
+      {/* Paywall Modal */}
+      <PaywallModal
+        visible={paywallReason !== null}
+        reason={paywallReason ?? "general"}
+        price={price}
+        onPurchase={purchasePremium}
+        onRestore={restorePurchases}
+        onClose={() => setPaywallReason(null)}
       />
     </LinearGradient>
   );
@@ -754,6 +1060,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
   },
+  headerRightGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
   headerRight: {
     flexDirection: "row",
     alignItems: "center",
@@ -771,6 +1082,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     color: "#555",
+  },
+  roadmapBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FFFFFF80",
+    alignItems: "center",
+    justifyContent: "center",
   },
   // Cloud
   cloud: {
@@ -893,6 +1212,15 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "900",
   },
+  // Ad container
+  adContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    paddingBottom: 8,
+  },
   // Flash
   flashOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -926,6 +1254,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 40,
     paddingTop: 12,
+    maxHeight: "85%",
   },
   modalHandle: {
     width: 40,
@@ -948,6 +1277,62 @@ const styles = StyleSheet.create({
     color: "#555",
     marginBottom: 12,
   },
+  // Theme selector
+  themeScroll: {
+    marginBottom: 20,
+    marginHorizontal: -8,
+  },
+  themeCard: {
+    width: 80,
+    marginHorizontal: 6,
+    alignItems: "center",
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "transparent",
+    padding: 4,
+  },
+  themeCardSelected: {
+    borderColor: "#FF6B35",
+  },
+  themeCardLocked: {
+    opacity: 0.7,
+  },
+  themePreview: {
+    width: 68,
+    height: 56,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lockBadge: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    width: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  themeName: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#555",
+    marginTop: 4,
+    textAlign: "center",
+  },
+  premiumBadge: {
+    fontSize: 9,
+    fontWeight: "bold",
+    color: "#FF6B35",
+    backgroundColor: "#FFF0E0",
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    marginTop: 2,
+  },
+  // Goal grid
   goalGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -973,6 +1358,102 @@ const styles = StyleSheet.create({
   goalButtonTextActive: {
     color: "#FFFFFF",
   },
+  // Milestones
+  milestoneSection: {
+    marginBottom: 20,
+  },
+  milestoneSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  proBadgeLarge: {
+    backgroundColor: "#FFF0E0",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  proBadgeLargeText: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#FF6B35",
+  },
+  milestoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    backgroundColor: "#F8F8F8",
+    borderRadius: 10,
+    marginBottom: 6,
+  },
+  milestoneCount: {
+    fontSize: 13,
+    fontWeight: "bold",
+    color: "#666",
+    width: 60,
+  },
+  emojiBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+  },
+  milestoneInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#333",
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+  },
+  addMilestoneBtn: {
+    borderWidth: 1,
+    borderColor: "#5BC8F5",
+    borderStyle: "dashed",
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  addMilestoneBtnText: {
+    fontSize: 14,
+    color: "#5BC8F5",
+    fontWeight: "600",
+  },
+  lockedPreview: {
+    position: "relative",
+  },
+  lockOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#FFFFFF99",
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lockText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#FF6B35",
+    backgroundColor: "#FFF0E0",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  // Undo
   undoButton: {
     backgroundColor: "#FFF0F0",
     borderRadius: 14,
@@ -991,6 +1472,7 @@ const styles = StyleSheet.create({
   undoButtonTextDisabled: {
     color: "#999",
   },
+  // Danger zone
   dangerZone: {
     borderTopWidth: 1,
     borderTopColor: "#F0F0F0",
@@ -1031,5 +1513,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "bold",
     color: "#FFFFFF",
+  },
+  // Emoji picker
+  emojiPickerOverlay: {
+    flex: 1,
+    backgroundColor: "#00000060",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emojiPickerContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    width: "80%",
+  },
+  emojiPickerTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#333",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  emojiGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 8,
+  },
+  emojiOption: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: "#F8F8F8",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
