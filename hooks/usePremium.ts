@@ -1,10 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 
 const PRODUCT_ID = "com.zerocode.myapp.premium";
 const STORAGE_KEY = "isPremium";
-const PURCHASE_TIMEOUT_MS = 5000;
 
 let iapModule: typeof import("react-native-iap") | null = null;
 
@@ -102,25 +101,28 @@ export function usePremium() {
       return true;
     }
 
-    // If IAP module not loaded or not ready, fail immediately (no waiting)
     if (!iapModule) {
+      Alert.alert(
+        "購入できません",
+        "App Storeに接続できません。しばらく後でお試しください。"
+      );
       return false;
     }
 
     try {
-      const purchasePromise = iapModule.requestPurchase({
+      // Fire-and-forget: StoreKit handles the purchase UI.
+      // The purchaseUpdatedListener handles success (finishTransaction + setPremium).
+      // No timeout — Sandbox takes 10-30s for password/confirmation.
+      iapModule.requestPurchase({
         sku: PRODUCT_ID,
         ...(Platform.OS === "ios" ? { andDangerouslyFinishTransactionAutomaticallyIOS: false } : {}),
+      }).catch((e) => {
+        // User cancelled or StoreKit error — logged only, not surfaced as error
+        console.warn("Purchase requestPurchase rejected:", e);
       });
-
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Purchase timeout")), PURCHASE_TIMEOUT_MS)
-      );
-
-      await Promise.race([purchasePromise, timeoutPromise]);
-      return true;
+      return true; // "purchase sheet launched" — not "purchase completed"
     } catch (e) {
-      console.warn("Purchase error:", e);
+      console.warn("Purchase launch error:", e);
       return false;
     }
   }, []);

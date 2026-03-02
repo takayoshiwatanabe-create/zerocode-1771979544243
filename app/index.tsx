@@ -403,7 +403,6 @@ function SettingsModal({
   const goals = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
   const [editingEmojiIdx, setEditingEmojiIdx] = useState<number | null>(null);
   const [paywallReason, setPaywallReason] = useState<PaywallReason | null>(null);
-  const [purchaseLoading, setPurchaseLoading] = useState(false);
 
   // Sync paywall state with modal visibility and initialPaywallReason
   useEffect(() => {
@@ -412,32 +411,24 @@ function SettingsModal({
     }
     if (!visible) {
       setPaywallReason(null);
-      setPurchaseLoading(false);
     }
   }, [visible, initialPaywallReason]);
+
+  // Auto-dismiss paywall when purchase succeeds (listener sets isPremium=true)
+  useEffect(() => {
+    if (isPremium && paywallReason) {
+      setPaywallReason(null);
+    }
+  }, [isPremium]);
 
   const handlePaywallPurchase = async () => {
     if (!isIAPReady) {
       Linking.openURL(APP_STORE_URL);
       return;
     }
-    setPurchaseLoading(true);
-    try {
-      const success = await onPurchase();
-      if (!success) {
-        Alert.alert(
-          t("paywall.errorTitle") ?? "エラー",
-          t("paywall.errorMsg") ?? "もう一度お試しください"
-        );
-      }
-    } catch {
-      Alert.alert(
-        t("paywall.errorTitle") ?? "エラー",
-        t("paywall.errorMsg") ?? "もう一度お試しください"
-      );
-    } finally {
-      setPurchaseLoading(false);
-    }
+    // Launch StoreKit purchase sheet — it handles its own UI/loading.
+    // The purchaseUpdatedListener in usePremium handles success → isPremium=true → auto-dismiss.
+    await onPurchase();
   };
 
   const paywallCfg = paywallReason ? PAYWALL_REASON_CONFIG[paywallReason] : null;
@@ -491,20 +482,17 @@ function SettingsModal({
               </View>
 
               <Pressable
-                style={[styles.paywallPurchaseBtn, purchaseLoading && styles.paywallPurchaseBtnDisabled]}
+                style={styles.paywallPurchaseBtn}
                 onPress={handlePaywallPurchase}
-                disabled={purchaseLoading}
               >
                 <LinearGradient
-                  colors={purchaseLoading ? ["#999", "#AAA"] : ["#FF6B35", "#FF8C42"]}
+                  colors={["#FF6B35", "#FF8C42"]}
                   style={styles.paywallPurchaseGradient}
                 >
                   <Text style={styles.paywallPurchaseText}>
-                    {purchaseLoading
-                      ? t("paywall.processing")
-                      : isIAPReady
-                        ? t("paywall.buyButton", { price })
-                        : t("paywall.openAppStore") ?? "App Storeで購入"}
+                    {isIAPReady
+                      ? t("paywall.buyButton", { price })
+                      : t("paywall.openAppStore") ?? "App Storeで購入"}
                   </Text>
                   <Text style={styles.paywallPurchaseSub}>
                     {isIAPReady
