@@ -45,6 +45,17 @@ export function usePremium() {
 
       await iapModule.initConnection();
 
+      // Plan C: Flush any stuck/pending transactions to prevent UI freeze
+      try {
+        if (Platform.OS === "ios" && typeof (iapModule as any).clearTransactionIOS === "function") {
+          await (iapModule as any).clearTransactionIOS();
+        } else if (Platform.OS === "android" && typeof (iapModule as any).flushFailedPurchasesCachedAsPendingAndroid === "function") {
+          await (iapModule as any).flushFailedPurchasesCachedAsPendingAndroid();
+        }
+      } catch (e) {
+        console.warn("Transaction flush error:", e);
+      }
+
       // Set up a single persistent purchase listener
       listenerRef.current = iapModule.purchaseUpdatedListener(
         async (purchase) => {

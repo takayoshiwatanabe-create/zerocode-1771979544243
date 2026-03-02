@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Dimensions,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -48,7 +49,7 @@ import { type StampCard, INITIAL_STAMP_CARD } from "@/types/stamp";
 import type { Milestone } from "@/types/milestone";
 import { EMOJI_OPTIONS } from "@/types/milestone";
 import { usePremium } from "@/hooks/usePremium";
-import { PaywallModal } from "@/components/PaywallModal";
+// PaywallModal eliminated — paywall UI is now embedded inside SettingsModal (Plan A)
 import { AdBanner } from "@/components/AdBanner";
 import { t, isRTL } from "@/i18n";
 
@@ -339,6 +340,26 @@ function EmojiPickerModal({
   );
 }
 
+// ── Paywall constants (Plan A: embedded in SettingsModal) ──
+type PaywallReason = "theme" | "milestone" | "roadmap" | "general";
+
+const PAYWALL_REASON_CONFIG: Record<PaywallReason, { emoji: string; titleKey: string; descKey: string }> = {
+  theme: { emoji: "🎨", titleKey: "paywall.themeTitle", descKey: "paywall.themeDesc" },
+  milestone: { emoji: "🎯", titleKey: "paywall.milestoneTitle", descKey: "paywall.milestoneDesc" },
+  roadmap: { emoji: "🗺️", titleKey: "paywall.roadmapTitle", descKey: "paywall.roadmapDesc" },
+  general: { emoji: "✨", titleKey: "paywall.generalTitle", descKey: "paywall.generalDesc" },
+};
+
+const PAYWALL_FEATURE_KEYS = [
+  "paywall.feature1",
+  "paywall.feature2",
+  "paywall.feature3",
+  "paywall.feature4",
+  "paywall.feature5",
+];
+
+const APP_STORE_URL = "https://apps.apple.com/jp/app/id6759640151";
+
 // ── Settings Modal ──
 function SettingsModal({
   visible,
@@ -354,7 +375,11 @@ function SettingsModal({
   onChangeTheme,
   milestones,
   onUpdateMilestones,
-  onShowPaywall,
+  isIAPReady,
+  price,
+  onPurchase,
+  onRestore,
+  initialPaywallReason,
 }: {
   visible: boolean;
   currentGoal: number;
@@ -369,10 +394,53 @@ function SettingsModal({
   onChangeTheme: (key: ThemeKey) => void;
   milestones: Milestone[];
   onUpdateMilestones: (milestones: Milestone[]) => void;
-  onShowPaywall: (reason: "theme" | "milestone" | "roadmap" | "general") => void;
+  isIAPReady: boolean;
+  price: string;
+  onPurchase: () => Promise<boolean>;
+  onRestore: () => Promise<void>;
+  initialPaywallReason: PaywallReason | null;
 }) {
   const goals = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
   const [editingEmojiIdx, setEditingEmojiIdx] = useState<number | null>(null);
+  const [paywallReason, setPaywallReason] = useState<PaywallReason | null>(null);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+
+  // Sync paywall state with modal visibility and initialPaywallReason
+  useEffect(() => {
+    if (visible && initialPaywallReason) {
+      setPaywallReason(initialPaywallReason);
+    }
+    if (!visible) {
+      setPaywallReason(null);
+      setPurchaseLoading(false);
+    }
+  }, [visible, initialPaywallReason]);
+
+  const handlePaywallPurchase = async () => {
+    if (!isIAPReady) {
+      Linking.openURL(APP_STORE_URL);
+      return;
+    }
+    setPurchaseLoading(true);
+    try {
+      const success = await onPurchase();
+      if (!success) {
+        Alert.alert(
+          t("paywall.errorTitle") ?? "エラー",
+          t("paywall.errorMsg") ?? "もう一度お試しください"
+        );
+      }
+    } catch {
+      Alert.alert(
+        t("paywall.errorTitle") ?? "エラー",
+        t("paywall.errorMsg") ?? "もう一度お試しください"
+      );
+    } finally {
+      setPurchaseLoading(false);
+    }
+  };
+
+  const paywallCfg = paywallReason ? PAYWALL_REASON_CONFIG[paywallReason] : null;
 
   const addMilestone = () => {
     const nextCount = milestones.length > 0
@@ -403,6 +471,56 @@ function SettingsModal({
     <Modal visible={visible} transparent animationType="slide">
       <Pressable style={styles.modalOverlay} onPress={onClose}>
         <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+          {paywallReason && paywallCfg ? (
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false} contentContainerStyle={styles.paywallScrollContent}>
+              {/* Back to settings */}
+              <Pressable onPress={() => setPaywallReason(null)} style={styles.paywallBackBtn}>
+                <Text style={styles.paywallBackText}>←</Text>
+              </Pressable>
+
+              <Text style={styles.paywallEmoji}>{paywallCfg.emoji}</Text>
+              <Text style={styles.paywallTitle}>{t(paywallCfg.titleKey)}</Text>
+              <Text style={styles.paywallDesc}>{t(paywallCfg.descKey)}</Text>
+
+              <View style={styles.paywallFeatureList}>
+                {PAYWALL_FEATURE_KEYS.map((key) => (
+                  <View key={key} style={styles.paywallFeatureRow}>
+                    <Text style={styles.paywallFeatureText}>{t(key)}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Pressable
+                style={[styles.paywallPurchaseBtn, purchaseLoading && styles.paywallPurchaseBtnDisabled]}
+                onPress={handlePaywallPurchase}
+                disabled={purchaseLoading}
+              >
+                <LinearGradient
+                  colors={purchaseLoading ? ["#999", "#AAA"] : ["#FF6B35", "#FF8C42"]}
+                  style={styles.paywallPurchaseGradient}
+                >
+                  <Text style={styles.paywallPurchaseText}>
+                    {purchaseLoading
+                      ? t("paywall.processing")
+                      : isIAPReady
+                        ? t("paywall.buyButton", { price })
+                        : t("paywall.openAppStore") ?? "App Storeで購入"}
+                  </Text>
+                  <Text style={styles.paywallPurchaseSub}>
+                    {isIAPReady
+                      ? t("paywall.buySubtitle")
+                      : t("paywall.openAppStoreSub") ?? "App Storeが開きます"}
+                  </Text>
+                </LinearGradient>
+              </Pressable>
+
+              <Pressable onPress={onRestore} style={styles.paywallRestoreBtn}>
+                <Text style={styles.paywallRestoreText}>{t("paywall.restore")}</Text>
+              </Pressable>
+
+              <Text style={styles.paywallLegal}>{t("paywall.legal")}</Text>
+            </ScrollView>
+          ) : (
           <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>{t("settings.title")}</Text>
@@ -424,7 +542,7 @@ function SettingsModal({
                       onPress={() => {
                         if (locked) {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                          onShowPaywall("theme");
+                          setPaywallReason("theme");
                           return;
                         }
                         onChangeTheme(key);
@@ -488,7 +606,7 @@ function SettingsModal({
                   <Pressable
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      onShowPaywall("milestone");
+                      setPaywallReason("milestone");
                     }}
                     style={styles.proBadgeLarge}
                   >
@@ -546,7 +664,7 @@ function SettingsModal({
                     style={styles.lockOverlay}
                     onPress={() => {
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                      onShowPaywall("milestone");
+                      setPaywallReason("milestone");
                     }}
                   >
                     <Text style={styles.lockText}>{t("paywall.lockedLabel")}</Text>
@@ -617,6 +735,7 @@ function SettingsModal({
 
             <View style={{ height: 20 }} />
           </ScrollView>
+          )}
 
           {/* Emoji picker */}
           <EmojiPickerModal
@@ -650,7 +769,7 @@ export default function HomeScreen() {
   const [toastVisible, setToastVisible] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<ThemeKey>("default");
   const [milestones, setMilestones] = useState<Milestone[]>([]);
-  const [paywallReason, setPaywallReason] = useState<"theme" | "milestone" | "roadmap" | "general" | null>(null);
+  const [settingsPaywall, setSettingsPaywall] = useState<PaywallReason | null>(null);
 
   const theme = THEMES[currentTheme];
 
@@ -908,7 +1027,8 @@ export default function HomeScreen() {
             onPress={() => {
               if (!isPremium) {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                setPaywallReason("roadmap");
+                setSettingsPaywall("roadmap");
+                setShowSettings(true);
                 return;
               }
               router.push("/roadmap");
@@ -1017,7 +1137,7 @@ export default function HomeScreen() {
       {/* Toast */}
       <Toast message={toastMsg} visible={toastVisible} />
 
-      {/* Settings Modal */}
+      {/* Settings Modal (with embedded Paywall — Plan A) */}
       <SettingsModal
         visible={showSettings}
         currentGoal={totalGoal}
@@ -1026,29 +1146,20 @@ export default function HomeScreen() {
         canUndo={currentCount > 0}
         onResetTotal={handleResetTotal}
         onResetAll={handleResetAll}
-        onClose={() => setShowSettings(false)}
+        onClose={() => {
+          setShowSettings(false);
+          setSettingsPaywall(null);
+        }}
         isPremium={isPremium}
         currentTheme={currentTheme}
         onChangeTheme={handleChangeTheme}
         milestones={milestones}
         onUpdateMilestones={handleUpdateMilestones}
-        onShowPaywall={(reason) => {
-          setShowSettings(false);
-          // Wait for SettingsModal slide-out animation to fully complete
-          // before presenting PaywallModal (iOS Modal animation ~300ms)
-          setTimeout(() => setPaywallReason(reason), 500);
-        }}
-      />
-
-      {/* Paywall Modal */}
-      <PaywallModal
-        visible={paywallReason !== null}
-        reason={paywallReason ?? "general"}
-        price={price}
         isIAPReady={isIAPReady}
+        price={price}
         onPurchase={purchasePremium}
         onRestore={restorePurchases}
-        onClose={() => setPaywallReason(null)}
+        initialPaywallReason={settingsPaywall}
       />
     </LinearGradient>
   );
@@ -1560,5 +1671,98 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8F8F8",
     alignItems: "center",
     justifyContent: "center",
+  },
+  // Paywall (embedded in SettingsModal — Plan A)
+  paywallScrollContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    alignItems: "center",
+  },
+  paywallBackBtn: {
+    alignSelf: "flex-start",
+    paddingVertical: 12,
+    paddingRight: 16,
+  },
+  paywallBackText: {
+    fontSize: 20,
+    color: "#666",
+  },
+  paywallEmoji: {
+    fontSize: 56,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  paywallTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#333",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  paywallDesc: {
+    fontSize: 15,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  paywallFeatureList: {
+    width: "100%",
+    backgroundColor: "#FFF8F0",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 24,
+  },
+  paywallFeatureRow: {
+    paddingVertical: 8,
+  },
+  paywallFeatureText: {
+    fontSize: 15,
+    color: "#333",
+  },
+  paywallPurchaseBtn: {
+    width: "100%",
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 12,
+    shadowColor: "#FF6B35",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  paywallPurchaseBtnDisabled: {
+    opacity: 0.7,
+  },
+  paywallPurchaseGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    borderRadius: 16,
+  },
+  paywallPurchaseText: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+  },
+  paywallPurchaseSub: {
+    fontSize: 12,
+    color: "#FFFFFFCC",
+    marginTop: 4,
+  },
+  paywallRestoreBtn: {
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  paywallRestoreText: {
+    fontSize: 14,
+    color: "#999",
+    textDecorationLine: "underline",
+  },
+  paywallLegal: {
+    fontSize: 11,
+    color: "#BBBBBB",
+    textAlign: "center",
+    lineHeight: 16,
   },
 });
