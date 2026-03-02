@@ -24,7 +24,6 @@ import Animated, {
   withSequence,
   withSpring,
   withTiming,
-  runOnJS,
   interpolate,
 } from "react-native-reanimated";
 import {
@@ -859,10 +858,6 @@ export default function HomeScreen() {
     setTimeout(() => setToastVisible(false), 1800);
   };
 
-  const navigateToReward = useCallback(() => {
-    router.push("/reward");
-  }, [router]);
-
   const handleStampPress = async () => {
     if (allFilled) return;
 
@@ -910,7 +905,15 @@ export default function HomeScreen() {
       );
 
       setTimeout(() => {
-        runOnJS(navigateToReward)();
+        const milestone = newlyAchieved.length > 0 ? newlyAchieved[0] : null;
+        router.push({
+          pathname: "/reward",
+          params: {
+            theme: currentTheme,
+            rewardEmoji: milestone?.rewardEmoji ?? "",
+            rewardName: milestone?.rewardName ?? "",
+          },
+        });
       }, 1200);
     } else {
       playSound(stampSound.current);

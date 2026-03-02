@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import Animated, {
@@ -22,9 +22,12 @@ import Animated, {
 } from "react-native-reanimated";
 import { resetStampCard } from "@/utils/storage";
 import { Colors } from "@/constants/colors";
+import { THEMES, type ThemeKey } from "@/constants/themes";
 import { t } from "@/i18n";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+const DEFAULT_BG: [string, string] = ["#87CEEB", "#FFE8A3"];
 
 // ── Confetti ──
 const CONFETTI_COUNT = 40;
@@ -151,7 +154,7 @@ function SunRays() {
   );
 }
 
-// ── Puppy character ──
+// ── Puppy character (default theme) ──
 function PuppyCharacter() {
   const bounce = useSharedValue(1);
 
@@ -209,6 +212,56 @@ function PuppyCharacter() {
   );
 }
 
+// ── Bouncing emoji (for theme characters) ──
+function BouncingEmoji({ emoji, delay }: { emoji: string; delay: number }) {
+  const bounce = useSharedValue(1);
+
+  useEffect(() => {
+    bounce.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(1.15, { duration: 500, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1.0, { duration: 500, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+        true,
+      ),
+    );
+  }, [bounce, delay]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: bounce.value }],
+  }));
+
+  return (
+    <Animated.View style={[styles.emojiCell, animStyle]}>
+      <Text style={styles.emojiText}>{emoji}</Text>
+    </Animated.View>
+  );
+}
+
+// ── Theme character (switches between puppy and emoji grid) ──
+function ThemeCharacter({ theme }: { theme: string }) {
+  const themeKey = theme as ThemeKey;
+  const themeConfig = THEMES[themeKey];
+  const preview = themeConfig?.preview;
+
+  if (!preview) {
+    return <PuppyCharacter />;
+  }
+
+  const emojis = [...preview];
+
+  return (
+    <View style={styles.emojiGrid}>
+      {emojis.map((emoji, i) => (
+        <BouncingEmoji key={i} emoji={emoji} delay={i * 150} />
+      ))}
+    </View>
+  );
+}
+
 // ── Cloud ──
 function Cloud({ style }: { style: object }) {
   return (
@@ -223,8 +276,16 @@ function Cloud({ style }: { style: object }) {
 // ── Main reward screen ──
 export default function RewardScreen() {
   const router = useRouter();
+  const { theme, rewardEmoji, rewardName } = useLocalSearchParams<{
+    theme?: string;
+    rewardEmoji?: string;
+    rewardName?: string;
+  }>();
   const titleScale = useSharedValue(0);
   const buttonsOpacity = useSharedValue(0);
+
+  const themeKey = (theme && theme in THEMES ? theme : "default") as ThemeKey;
+  const bgColors = themeKey !== "default" ? THEMES[themeKey].bgColors : DEFAULT_BG;
 
   useFocusEffect(
     useCallback(() => {
@@ -249,9 +310,11 @@ export default function RewardScreen() {
     router.replace("/");
   };
 
+  const hasRewardName = !!rewardName;
+
   return (
     <LinearGradient
-      colors={["#87CEEB", "#FFE8A3"]}
+      colors={bgColors}
       style={styles.container}
     >
       {/* Sun rays */}
@@ -266,7 +329,7 @@ export default function RewardScreen() {
 
       {/* Content */}
       <View style={styles.content}>
-        {/* Title: ごほうび！ */}
+        {/* Title area */}
         <Animated.View style={[styles.titleContainer, titleStyle]}>
           <LinearGradient
             colors={["#FF9DD2", "#FFFFFF", "#FF9DD2", "#FFFFFF", "#FF9DD2"]}
@@ -274,12 +337,32 @@ export default function RewardScreen() {
             end={{ x: 1, y: 1 }}
             style={styles.titleGradient}
           >
-            <Text style={styles.titleText}>{t("reward.title")}</Text>
+            {hasRewardName ? (
+              <>
+                <Text style={styles.rewardEmojiText}>{rewardEmoji}</Text>
+                <Text
+                  style={styles.rewardNameText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {rewardName}
+                </Text>
+                <Text style={styles.subtitleText}>{t("reward.title")}</Text>
+              </>
+            ) : (
+              <Text
+                style={styles.titleText}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+              >
+                {t("reward.title")}
+              </Text>
+            )}
           </LinearGradient>
         </Animated.View>
 
-        {/* Puppy character */}
-        <PuppyCharacter />
+        {/* Theme character */}
+        <ThemeCharacter theme={themeKey} />
 
         {/* Reward button */}
         <Animated.View style={buttonsStyle}>
@@ -347,6 +430,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 24,
     paddingVertical: 8,
+    alignItems: "center",
   },
   titleText: {
     fontSize: 72,
@@ -356,6 +440,27 @@ const styles = StyleSheet.create({
     textShadowColor: "#FFFFFF",
     textShadowOffset: { width: 2, height: 2 },
     textShadowRadius: 0,
+  },
+  rewardEmojiText: {
+    fontSize: 56,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  rewardNameText: {
+    fontSize: 36,
+    fontWeight: "900",
+    color: "#FF6B9D",
+    textAlign: "center",
+    textShadowColor: "#FFFFFF",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 0,
+  },
+  subtitleText: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#FF9DD2",
+    textAlign: "center",
+    marginTop: 2,
   },
   // Puppy
   puppyContainer: {
@@ -452,6 +557,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#D4A574",
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8,
+  },
+  // Emoji grid (theme characters)
+  emojiGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    width: 160,
+    justifyContent: "center",
+    gap: 12,
+    marginBottom: 40,
+  },
+  emojiCell: {
+    width: 68,
+    height: 68,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emojiText: {
+    fontSize: 48,
   },
   // Reward button
   rewardButton: {
