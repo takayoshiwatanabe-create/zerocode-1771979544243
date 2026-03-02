@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Alert,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -13,10 +14,13 @@ import { t } from "@/i18n";
 
 type PaywallReason = "theme" | "milestone" | "roadmap" | "general";
 
+const APP_STORE_URL = "https://apps.apple.com/jp/app/id6759640151";
+
 interface Props {
   visible: boolean;
   reason: PaywallReason;
   price: string;
+  isIAPReady: boolean;
   onPurchase: () => Promise<boolean>;
   onRestore: () => Promise<void>;
   onClose: () => void;
@@ -41,6 +45,7 @@ export function PaywallModal({
   visible,
   reason,
   price,
+  isIAPReady,
   onPurchase,
   onRestore,
   onClose,
@@ -48,13 +53,41 @@ export function PaywallModal({
   const [loading, setLoading] = useState(false);
   const cfg = REASON_CONFIG[reason] ?? REASON_CONFIG.general;
 
-  // Reset loading state when modal closes to prevent stale disabled state
+  // Reset loading state when modal closes
   useEffect(() => {
     if (!visible) setLoading(false);
   }, [visible]);
 
+  const handlePurchase = async () => {
+    if (!isIAPReady) {
+      // IAP unavailable — open App Store directly
+      Linking.openURL(APP_STORE_URL);
+      return;
+    }
+    setLoading(true);
+    try {
+      const success = await onPurchase();
+      if (!success) {
+        Alert.alert(
+          t("paywall.errorTitle") ?? "エラー",
+          t("paywall.errorMsg") ?? "もう一度お試しください"
+        );
+      }
+    } catch (e) {
+      Alert.alert(
+        t("paywall.errorTitle") ?? "エラー",
+        t("paywall.errorMsg") ?? "もう一度お試しください"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Conditionally render Modal to prevent touch-blocking when invisible
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="slide">
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.sheet}>
           {/* Close button */}
@@ -82,28 +115,25 @@ export function PaywallModal({
 
             {/* Purchase button */}
             <Pressable
-              style={styles.purchaseBtn}
-              onPress={async () => {
-                setLoading(true);
-                try {
-                  await onPurchase();
-                } catch (e) {
-                  Alert.alert(t("paywall.errorTitle") ?? "エラー", t("paywall.errorMsg") ?? "もう一度お試しください");
-                } finally {
-                  setLoading(false);
-                }
-              }}
+              style={[styles.purchaseBtn, loading && styles.purchaseBtnDisabled]}
+              onPress={handlePurchase}
               disabled={loading}
             >
               <LinearGradient
-                colors={["#FF6B35", "#FF8C42"]}
+                colors={loading ? ["#999", "#AAA"] : ["#FF6B35", "#FF8C42"]}
                 style={styles.purchaseBtnGradient}
               >
                 <Text style={styles.purchaseBtnText}>
-                  {loading ? t("paywall.processing") : t("paywall.buyButton", { price })}
+                  {loading
+                    ? t("paywall.processing")
+                    : isIAPReady
+                      ? t("paywall.buyButton", { price })
+                      : t("paywall.openAppStore") ?? "App Storeで購入"}
                 </Text>
                 <Text style={styles.purchaseBtnSub}>
-                  {t("paywall.buySubtitle")}
+                  {isIAPReady
+                    ? t("paywall.buySubtitle")
+                    : t("paywall.openAppStoreSub") ?? "App Storeが開きます"}
                 </Text>
               </LinearGradient>
             </Pressable>
@@ -199,6 +229,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
+  },
+  purchaseBtnDisabled: {
+    opacity: 0.7,
   },
   purchaseBtnGradient: {
     paddingVertical: 16,

@@ -637,7 +637,7 @@ function SettingsModal({
 // ── Main screen ──
 export default function HomeScreen() {
   const router = useRouter();
-  const { isPremium, price, purchasePremium, restorePurchases } = usePremium();
+  const { isPremium, isIAPReady, price, purchasePremium, restorePurchases } = usePremium();
 
   const [card, setCard] = useState<StampCard>(INITIAL_STAMP_CARD);
   const [totalGoal, setTotalGoal] = useState(12);
@@ -1043,6 +1043,7 @@ export default function HomeScreen() {
         visible={paywallReason !== null}
         reason={paywallReason ?? "general"}
         price={price}
+        isIAPReady={isIAPReady}
         onPurchase={purchasePremium}
         onRestore={restorePurchases}
         onClose={() => setPaywallReason(null)}
