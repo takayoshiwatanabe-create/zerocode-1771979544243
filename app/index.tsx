@@ -423,6 +423,7 @@ function SettingsModal({
                       key={key}
                       onPress={() => {
                         if (locked) {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                           onShowPaywall("theme");
                           return;
                         }
@@ -485,7 +486,10 @@ function SettingsModal({
                 <Text style={styles.modalSectionTitle}>{t("settings.milestones")}</Text>
                 {!isPremium && (
                   <Pressable
-                    onPress={() => onShowPaywall("milestone")}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      onShowPaywall("milestone");
+                    }}
                     style={styles.proBadgeLarge}
                   >
                     <Text style={styles.proBadgeLargeText}>{t("paywall.unlockPro")}</Text>
@@ -540,7 +544,10 @@ function SettingsModal({
                   ))}
                   <Pressable
                     style={styles.lockOverlay}
-                    onPress={() => onShowPaywall("milestone")}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      onShowPaywall("milestone");
+                    }}
                   >
                     <Text style={styles.lockText}>{t("paywall.lockedLabel")}</Text>
                   </Pressable>
@@ -900,6 +907,7 @@ export default function HomeScreen() {
             style={styles.roadmapBtn}
             onPress={() => {
               if (!isPremium) {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 setPaywallReason("roadmap");
                 return;
               }
