@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -47,6 +48,11 @@ export function PaywallModal({
   const [loading, setLoading] = useState(false);
   const cfg = REASON_CONFIG[reason] ?? REASON_CONFIG.general;
 
+  // Reset loading state when modal closes to prevent stale disabled state
+  useEffect(() => {
+    if (!visible) setLoading(false);
+  }, [visible]);
+
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.overlay}>
@@ -79,8 +85,13 @@ export function PaywallModal({
               style={styles.purchaseBtn}
               onPress={async () => {
                 setLoading(true);
-                await onPurchase();
-                setLoading(false);
+                try {
+                  await onPurchase();
+                } catch (e) {
+                  Alert.alert(t("paywall.errorTitle") ?? "エラー", t("paywall.errorMsg") ?? "もう一度お試しください");
+                } finally {
+                  setLoading(false);
+                }
               }}
               disabled={loading}
             >
