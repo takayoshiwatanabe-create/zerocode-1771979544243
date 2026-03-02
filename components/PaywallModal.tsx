@@ -60,7 +60,6 @@ export function PaywallModal({
 
   const handlePurchase = async () => {
     if (!isIAPReady) {
-      // IAP unavailable — open App Store directly
       Linking.openURL(APP_STORE_URL);
       return;
     }
@@ -83,11 +82,11 @@ export function PaywallModal({
     }
   };
 
-  // Conditionally render Modal to prevent touch-blocking when invisible
-  if (!visible) return null;
-
+  // Always render Modal — use visible prop to control.
+  // Conditionally unmounting <Modal> causes ghost-modal freeze on iOS
+  // when another Modal (SettingsModal) is still in its dismiss animation.
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.sheet}>
           {/* Close button */}

@@ -1034,7 +1034,9 @@ export default function HomeScreen() {
         onUpdateMilestones={handleUpdateMilestones}
         onShowPaywall={(reason) => {
           setShowSettings(false);
-          setTimeout(() => setPaywallReason(reason), 300);
+          // Wait for SettingsModal slide-out animation to fully complete
+          // before presenting PaywallModal (iOS Modal animation ~300ms)
+          setTimeout(() => setPaywallReason(reason), 500);
         }}
       />
 
