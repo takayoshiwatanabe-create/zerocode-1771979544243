@@ -10,7 +10,9 @@
     "preview": {
       "distribution": "internal"
     },
-    "production": {},
+    "production": {
+      "credentialsSource": "local"
+    },
     "production:ios": {
       "extends": "production",
       "credentialsSource": "local"

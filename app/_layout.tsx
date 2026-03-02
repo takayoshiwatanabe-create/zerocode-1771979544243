@@ -1,7 +1,10 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useReviewPrompt } from "../hooks/useReviewPrompt";
 
 export default function RootLayout() {
+  useReviewPrompt();
+
   return (
     <>
       <Stack

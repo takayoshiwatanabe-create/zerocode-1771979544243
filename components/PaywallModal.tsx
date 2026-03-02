@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import {
   Alert,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -13,8 +12,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import { t } from "@/i18n";
 
 type PaywallReason = "theme" | "milestone" | "roadmap" | "general";
-
-const APP_STORE_URL = "https://apps.apple.com/jp/app/id6759640151";
 
 interface Props {
   visible: boolean;
@@ -60,7 +57,10 @@ export function PaywallModal({
 
   const handlePurchase = async () => {
     if (!isIAPReady) {
-      Linking.openURL(APP_STORE_URL);
+      Alert.alert(
+        "購入できません",
+        "App Storeに接続できません。しばらく後でお試しください。"
+      );
       return;
     }
     setLoading(true);
@@ -82,11 +82,10 @@ export function PaywallModal({
     }
   };
 
-  // Always render Modal — use visible prop to control.
-  // Conditionally unmounting <Modal> causes ghost-modal freeze on iOS
-  // when another Modal (SettingsModal) is still in its dismiss animation.
+  if (!visible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={true} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.sheet}>
           {/* Close button */}

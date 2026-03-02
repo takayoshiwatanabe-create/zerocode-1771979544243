@@ -24,3 +24,6 @@ Expo managed workflow。AsyncStorageでローカル保存。アニメーショ�
 - All components use functional style with proper typing
 - Use StyleSheet.create for styles
 - Follow React Native best practices for cross-platform compatibility
+
+## Important Deadlines
+- 2026年4月28日までにXcode 26対応が必要。ExpoがSDK対応を出し次第、eas build コマンドを再実行するだけで対応完了。期限1週間前に確認すること。

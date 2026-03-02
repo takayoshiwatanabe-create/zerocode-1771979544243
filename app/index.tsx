@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   Dimensions,
-  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -358,8 +357,6 @@ const PAYWALL_FEATURE_KEYS = [
   "paywall.feature5",
 ];
 
-const APP_STORE_URL = "https://apps.apple.com/jp/app/id6759640151";
-
 // ── Settings Modal ──
 function SettingsModal({
   visible,
@@ -423,7 +420,10 @@ function SettingsModal({
 
   const handlePaywallPurchase = async () => {
     if (!isIAPReady) {
-      Linking.openURL(APP_STORE_URL);
+      Alert.alert(
+        "購入できません",
+        "App Storeに接続できません。しばらく後でお試しください。"
+      );
       return;
     }
     // Launch StoreKit purchase sheet — it handles its own UI/loading.
